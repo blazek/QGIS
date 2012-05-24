@@ -378,7 +378,10 @@ const QgsRasterBandStats QgsRasterLayer::bandStatistics( int theBandNo )
     return myRasterBandStats;
   }
 
+  QTime time;
+  time.start();
   myRasterBandStats = mDataProvider->bandStatistics( theBandNo );
+  QgsDebugMsg( QString( "stats calc band %1 time (ms): %2" ).arg( theBandNo ).arg( time.elapsed() ) );
   QgsDebugMsg( "adding stats to stats collection at position " + QString::number( theBandNo - 1 ) );
   //add this band to the class stats map
   mRasterStatsList[theBandNo - 1] = myRasterBandStats;
