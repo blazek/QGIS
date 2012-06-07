@@ -38,10 +38,10 @@ email                : tim at linfiniti.com
 #include "qgscolorrampshader.h"
 
 //renderers
-#include "qgspalettedrasterrenderer.h"
-#include "qgsmultibandcolorrenderer.h"
-#include "qgssinglebandcolordatarenderer.h"
-#include "qgssinglebandpseudocolorrenderer.h"
+//#include "qgspalettedrasterrenderer.h"
+//#include "qgsmultibandcolorrenderer.h"
+//#include "qgssinglebandcolordatarenderer.h"
+//#include "qgssinglebandpseudocolorrenderer.h"
 #include "qgssinglebandgrayrenderer.h"
 
 #include <cstdio>
@@ -592,57 +592,61 @@ void QgsRasterLayer::setRendererForDrawingStyle( const DrawingStyle &  theDrawin
 
   switch ( theDrawingStyle )
   {
-    case PalettedColor:
-    {
-      int grayBand = bandNumber( grayBandName() );
-      QgsColorRampShader* colorRampShader = dynamic_cast<QgsColorRampShader*>( rasterShader()->rasterShaderFunction() );
-      if ( colorRampShader )
-      {
-        QList<QgsColorRampShader::ColorRampItem> colorEntries = colorRampShader->colorRampItemList();
 
-        //go through list and take maximum value (it could be that entries don't start at 0 or indices are not contiguous)
-        int colorArraySize = 0;
-        QList<QgsColorRampShader::ColorRampItem>::const_iterator colorIt = colorEntries.constBegin();
-        for ( ; colorIt != colorEntries.constEnd(); ++colorIt )
-        {
-          if ( colorIt->value > colorArraySize )
+// TODO
+      /*
+          case PalettedColor:
           {
-            colorArraySize = ( int )( colorIt->value );
+            int grayBand = bandNumber( grayBandName() );
+            QgsColorRampShader* colorRampShader = dynamic_cast<QgsColorRampShader*>( rasterShader()->rasterShaderFunction() );
+            if ( colorRampShader )
+            {
+              QList<QgsColorRampShader::ColorRampItem> colorEntries = colorRampShader->colorRampItemList();
+
+              //go through list and take maximum value (it could be that entries don't start at 0 or indices are not contiguous)
+              int colorArraySize = 0;
+              QList<QgsColorRampShader::ColorRampItem>::const_iterator colorIt = colorEntries.constBegin();
+              for ( ; colorIt != colorEntries.constEnd(); ++colorIt )
+              {
+                if ( colorIt->value > colorArraySize )
+                {
+                  colorArraySize = ( int )( colorIt->value );
+                }
+              }
+
+              colorArraySize += 1; //usually starts at 0
+              QColor* colorArray = new QColor[ colorArraySize ];
+              colorIt = colorEntries.constBegin();
+              for ( ; colorIt != colorEntries.constEnd(); ++colorIt )
+              {
+                colorArray[( int )( colorIt->value )] = colorIt->color;
+              }
+
+              renderer = new QgsPalettedRasterRenderer( mDataProvider,
+                  grayBand,
+                  colorArray,
+                  colorArraySize );
+            }
+            else //try to get it from the color table
+            {
+              QList<QgsColorRampShader::ColorRampItem> itemList = mRasterStatsList[ grayBand - 1].colorTable;
+              QColor* colorArray = new QColor[itemList.size()];
+              QList<QgsColorRampShader::ColorRampItem>::const_iterator colorIt = itemList.constBegin();
+              for ( ; colorIt != itemList.constEnd(); ++colorIt )
+              {
+                colorArray[( int )colorIt->value] =  colorIt->color;
+              }
+              renderer = new QgsPalettedRasterRenderer( mDataProvider,
+                  grayBand, colorArray, itemList.size() );
+            }
+            break;
           }
-        }
-
-        colorArraySize += 1; //usually starts at 0
-        QColor* colorArray = new QColor[ colorArraySize ];
-        colorIt = colorEntries.constBegin();
-        for ( ; colorIt != colorEntries.constEnd(); ++colorIt )
-        {
-          colorArray[( int )( colorIt->value )] = colorIt->color;
-        }
-
-        renderer = new QgsPalettedRasterRenderer( mDataProvider,
-            grayBand,
-            colorArray,
-            colorArraySize );
-      }
-      else //try to get it from the color table
-      {
-        QList<QgsColorRampShader::ColorRampItem> itemList = mRasterStatsList[ grayBand - 1].colorTable;
-        QColor* colorArray = new QColor[itemList.size()];
-        QList<QgsColorRampShader::ColorRampItem>::const_iterator colorIt = itemList.constBegin();
-        for ( ; colorIt != itemList.constEnd(); ++colorIt )
-        {
-          colorArray[( int )colorIt->value] =  colorIt->color;
-        }
-        renderer = new QgsPalettedRasterRenderer( mDataProvider,
-            grayBand, colorArray, itemList.size() );
-      }
-      break;
-    }
+      */
     case MultiBandSingleBandGray:
     case SingleBandGray:
     {
       int grayBand = bandNumber( mGrayBandName );
-      renderer = new QgsSingleBandGrayRenderer( mDataProvider, grayBand );
+      renderer = new QgsSingleBandGrayRenderer( dynamic_cast<QgsRasterFace*>( mDataProvider ), grayBand );
       QgsContrastEnhancement* ce = new QgsContrastEnhancement(( QgsContrastEnhancement::QgsRasterDataType )(
             mDataProvider->dataType( grayBand ) ) );
       ce->setContrastEnhancementAlgorithm( contrastEnhancementAlgorithm() );
@@ -660,95 +664,97 @@ void QgsRasterLayer::setRendererForDrawingStyle( const DrawingStyle &  theDrawin
       (( QgsSingleBandGrayRenderer* )renderer )->setContrastEnhancement( ce );
       break;
     }
-    case SingleBandPseudoColor:
-    {
-      int bandNo = bandNumber( mGrayBandName );
-      QgsRasterBandStats myRasterBandStats = bandStatistics( bandNo );
-      double myMinimumValue = 0.0;
-      double myMaximumValue = 0.0;
-      //Use standard deviations if set, otherwise, use min max of band
-      if ( mStandardDeviations > 0 )
-      {
-        myMinimumValue = ( myRasterBandStats.mean - ( mStandardDeviations * myRasterBandStats.stdDev ) );
-        myMaximumValue = ( myRasterBandStats.mean + ( mStandardDeviations * myRasterBandStats.stdDev ) );
-      }
-      else
-      {
-        myMinimumValue = myRasterBandStats.minimumValue;
-        myMaximumValue = myRasterBandStats.maximumValue;
-      }
+    /*
+        case SingleBandPseudoColor:
+        {
+          int bandNo = bandNumber( mGrayBandName );
+          QgsRasterBandStats myRasterBandStats = bandStatistics( bandNo );
+          double myMinimumValue = 0.0;
+          double myMaximumValue = 0.0;
+          //Use standard deviations if set, otherwise, use min max of band
+          if ( mStandardDeviations > 0 )
+          {
+            myMinimumValue = ( myRasterBandStats.mean - ( mStandardDeviations * myRasterBandStats.stdDev ) );
+            myMaximumValue = ( myRasterBandStats.mean + ( mStandardDeviations * myRasterBandStats.stdDev ) );
+          }
+          else
+          {
+            myMinimumValue = myRasterBandStats.minimumValue;
+            myMaximumValue = myRasterBandStats.maximumValue;
+          }
 
-      mRasterShader->setMinimumValue( myMinimumValue );
-      mRasterShader->setMaximumValue( myMaximumValue );
+          mRasterShader->setMinimumValue( myMinimumValue );
+          mRasterShader->setMaximumValue( myMaximumValue );
 
-      renderer = new QgsSingleBandPseudoColorRenderer( mDataProvider, bandNo, mRasterShader );
-      break;
-    }
-    case MultiBandColor:
-    {
-      int red = -1;
-      QgsContrastEnhancement* redEnhancement = 0;
-      if ( mRedBandName != TRSTRING_NOT_SET )
-      {
-        red = bandNumber( mRedBandName );
-        if ( contrastEnhancementAlgorithm() != QgsContrastEnhancement::NoEnhancement )
-        {
-          QgsContrastEnhancement* bkRedEnhancement = contrastEnhancement( red );
-          if ( bkRedEnhancement )
-          {
-            redEnhancement = new QgsContrastEnhancement(( QgsContrastEnhancement::QgsRasterDataType )(
-                  mDataProvider->dataType( red ) ) );
-            redEnhancement->setMinimumValue( bkRedEnhancement->minimumValue() );
-            redEnhancement->setMaximumValue( bkRedEnhancement->maximumValue() );
-            redEnhancement->setContrastEnhancementAlgorithm( contrastEnhancementAlgorithm() );
-          }
+          renderer = new QgsSingleBandPseudoColorRenderer( mDataProvider, bandNo, mRasterShader );
+          break;
         }
-      }
-      int green = -1;
-      QgsContrastEnhancement* greenEnhancement = 0;
-      if ( mGreenBandName != TRSTRING_NOT_SET )
-      {
-        green = bandNumber( mGreenBandName );
-        if ( contrastEnhancementAlgorithm() != QgsContrastEnhancement::NoEnhancement )
+        case MultiBandColor:
         {
-          QgsContrastEnhancement* bkGreenEnhancement = contrastEnhancement( green );
-          if ( bkGreenEnhancement )
+          int red = -1;
+          QgsContrastEnhancement* redEnhancement = 0;
+          if ( mRedBandName != TRSTRING_NOT_SET )
           {
-            greenEnhancement = new QgsContrastEnhancement(( QgsContrastEnhancement::QgsRasterDataType )(
-                  mDataProvider->dataType( green ) ) );
-            greenEnhancement->setMinimumValue( bkGreenEnhancement->minimumValue() );
-            greenEnhancement->setMaximumValue( bkGreenEnhancement->maximumValue() );
-            greenEnhancement->setContrastEnhancementAlgorithm( contrastEnhancementAlgorithm() );
+            red = bandNumber( mRedBandName );
+            if ( contrastEnhancementAlgorithm() != QgsContrastEnhancement::NoEnhancement )
+            {
+              QgsContrastEnhancement* bkRedEnhancement = contrastEnhancement( red );
+              if ( bkRedEnhancement )
+              {
+                redEnhancement = new QgsContrastEnhancement(( QgsContrastEnhancement::QgsRasterDataType )(
+                      mDataProvider->dataType( red ) ) );
+                redEnhancement->setMinimumValue( bkRedEnhancement->minimumValue() );
+                redEnhancement->setMaximumValue( bkRedEnhancement->maximumValue() );
+                redEnhancement->setContrastEnhancementAlgorithm( contrastEnhancementAlgorithm() );
+              }
+            }
           }
+          int green = -1;
+          QgsContrastEnhancement* greenEnhancement = 0;
+          if ( mGreenBandName != TRSTRING_NOT_SET )
+          {
+            green = bandNumber( mGreenBandName );
+            if ( contrastEnhancementAlgorithm() != QgsContrastEnhancement::NoEnhancement )
+            {
+              QgsContrastEnhancement* bkGreenEnhancement = contrastEnhancement( green );
+              if ( bkGreenEnhancement )
+              {
+                greenEnhancement = new QgsContrastEnhancement(( QgsContrastEnhancement::QgsRasterDataType )(
+                      mDataProvider->dataType( green ) ) );
+                greenEnhancement->setMinimumValue( bkGreenEnhancement->minimumValue() );
+                greenEnhancement->setMaximumValue( bkGreenEnhancement->maximumValue() );
+                greenEnhancement->setContrastEnhancementAlgorithm( contrastEnhancementAlgorithm() );
+              }
+            }
+          }
+          int blue = -1;
+          QgsContrastEnhancement* blueEnhancement = 0;
+          if ( mBlueBandName != TRSTRING_NOT_SET )
+          {
+            blue = bandNumber( mBlueBandName );
+            if ( contrastEnhancementAlgorithm() != QgsContrastEnhancement::NoEnhancement )
+            {
+              QgsContrastEnhancement* bkBlueEnhancement = contrastEnhancement( blue );
+              if ( bkBlueEnhancement )
+              {
+                blueEnhancement = new QgsContrastEnhancement(( QgsContrastEnhancement::QgsRasterDataType )(
+                      mDataProvider->dataType( blue ) ) );
+                blueEnhancement->setMinimumValue( bkBlueEnhancement->minimumValue() );
+                blueEnhancement->setMaximumValue( bkBlueEnhancement->maximumValue() );
+                blueEnhancement->setContrastEnhancementAlgorithm( contrastEnhancementAlgorithm() );
+              }
+            }
+          }
+          renderer = new QgsMultiBandColorRenderer( mDataProvider, red, green, blue,
+              redEnhancement, greenEnhancement, blueEnhancement );
+          break;
         }
-      }
-      int blue = -1;
-      QgsContrastEnhancement* blueEnhancement = 0;
-      if ( mBlueBandName != TRSTRING_NOT_SET )
-      {
-        blue = bandNumber( mBlueBandName );
-        if ( contrastEnhancementAlgorithm() != QgsContrastEnhancement::NoEnhancement )
+        case SingleBandColorDataStyle:
         {
-          QgsContrastEnhancement* bkBlueEnhancement = contrastEnhancement( blue );
-          if ( bkBlueEnhancement )
-          {
-            blueEnhancement = new QgsContrastEnhancement(( QgsContrastEnhancement::QgsRasterDataType )(
-                  mDataProvider->dataType( blue ) ) );
-            blueEnhancement->setMinimumValue( bkBlueEnhancement->minimumValue() );
-            blueEnhancement->setMaximumValue( bkBlueEnhancement->maximumValue() );
-            blueEnhancement->setContrastEnhancementAlgorithm( contrastEnhancementAlgorithm() );
-          }
+          renderer = new QgsSingleBandColorDataRenderer( mDataProvider, bandNumber( mGrayBandName ) );
+          break;
         }
-      }
-      renderer = new QgsMultiBandColorRenderer( mDataProvider, red, green, blue,
-          redEnhancement, greenEnhancement, blueEnhancement );
-      break;
-    }
-    case SingleBandColorDataStyle:
-    {
-      renderer = new QgsSingleBandColorDataRenderer( mDataProvider, bandNumber( mGrayBandName ) );
-      break;
-    }
+    */
     default:
       break;
   }
@@ -1003,7 +1009,9 @@ void QgsRasterLayer::draw( QPainter * theQPainter,
 
   if ( mRenderer )
   {
-    mRenderer->draw( theQPainter, theRasterViewPort, theQgsMapToPixel );
+    //mRenderer->draw( theQPainter, theRasterViewPort, theQgsMapToPixel );
+    QgsRasterDrawer drawer( mRenderer );
+    drawer.draw( theQPainter, theRasterViewPort, theQgsMapToPixel );
   }
 
   QgsDebugMsg( QString( "raster draw time (ms): %1" ).arg( time.elapsed() ) );
