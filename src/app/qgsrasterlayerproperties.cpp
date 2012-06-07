@@ -235,7 +235,7 @@ QgsRasterLayerProperties::QgsRasterLayerProperties( QgsMapLayer* lyr, QgsMapCanv
     {
       mZoomedOutResamplingComboBox->setCurrentIndex( 0 );
     }
-    mMaximumOversamplingSpinBox->setValue( renderer->maxOversampling() );
+    mMaximumOversamplingSpinBox->setValue( resampleFilter->maxOversampling() );
   }
 
   //transparency band
