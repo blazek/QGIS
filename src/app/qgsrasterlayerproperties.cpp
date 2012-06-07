@@ -201,10 +201,12 @@ QgsRasterLayerProperties::QgsRasterLayerProperties( QgsMapLayer* lyr, QgsMapCanv
   mZoomedInResamplingComboBox->insertItem( 2, tr( "Cubic" ) );
   mZoomedOutResamplingComboBox->insertItem( 0, tr( "Nearest neighbour" ) );
   mZoomedOutResamplingComboBox->insertItem( 1, tr( "Average" ) );
+
+  const QgsRasterResampleFilter* resampleFilter = mRasterLayer->resampleFilter();
   //set combo boxes to current resampling types
-  if ( renderer )
+  if ( resampleFilter )
   {
-    const QgsRasterResampler* zoomedInResampler = renderer->zoomedInResampler();
+    const QgsRasterResampler* zoomedInResampler = resampleFilter->zoomedInResampler();
     if ( zoomedInResampler )
     {
       if ( zoomedInResampler->type() == "bilinear" )
@@ -221,7 +223,7 @@ QgsRasterLayerProperties::QgsRasterLayerProperties( QgsMapLayer* lyr, QgsMapCanv
       mZoomedInResamplingComboBox->setCurrentIndex( 0 );
     }
 
-    const QgsRasterResampler* zoomedOutResampler = renderer->zoomedOutResampler();
+    const QgsRasterResampler* zoomedOutResampler = resampleFilter->zoomedOutResampler();
     if ( zoomedOutResampler )
     {
       if ( zoomedOutResampler->type() == "bilinear" ) //bilinear resampler does averaging when zooming out
@@ -781,6 +783,8 @@ void QgsRasterLayerProperties::apply()
   pixmapLegend->setScaledContents( true );
   pixmapLegend->repaint();
 
+  QgsRasterResampleFilter* resampleFilter = mRasterLayer->resampleFilter();
+
   QgsRasterResampler* zoomedInResampler = 0;
   QString zoomedInResamplingMethod = mZoomedInResamplingComboBox->currentText();
   if ( zoomedInResamplingMethod == tr( "Bilinear" ) )
@@ -792,9 +796,9 @@ void QgsRasterLayerProperties::apply()
     zoomedInResampler = new QgsCubicRasterResampler();
   }
 
-  if ( rasterRenderer )
+  if ( resampleFilter )
   {
-    rasterRenderer->setZoomedInResampler( zoomedInResampler );
+    resampleFilter->setZoomedInResampler( zoomedInResampler );
   }
 
   //raster resampling
@@ -805,14 +809,14 @@ void QgsRasterLayerProperties::apply()
     zoomedOutResampler = new QgsBilinearRasterResampler();
   }
 
-  if ( rasterRenderer )
+  if ( resampleFilter )
   {
-    rasterRenderer->setZoomedOutResampler( zoomedOutResampler );
+    resampleFilter->setZoomedOutResampler( zoomedOutResampler );
   }
 
-  if ( rasterRenderer )
+  if ( resampleFilter )
   {
-    rasterRenderer->setMaxOversampling( mMaximumOversamplingSpinBox->value() );
+    resampleFilter->setMaxOversampling( mMaximumOversamplingSpinBox->value() );
   }
 
 

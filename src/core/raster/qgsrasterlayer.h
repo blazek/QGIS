@@ -43,6 +43,7 @@
 #include "qgsrastershaderfunction.h"
 #include "qgsrasterface.h"
 #include "qgsrasterdrawer.h"
+#include "qgsrasterresamplefilter.h"
 #include "qgsrasterdataprovider.h"
 
 //
@@ -398,6 +399,11 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
     void setRenderer( QgsRasterRenderer* renderer );
     const QgsRasterRenderer* renderer() const { return mRenderer; }
     QgsRasterRenderer* renderer() { return mRenderer; }
+
+    /**Set raster resample filter. Takes ownership of the resample filter object*/
+    void setResampleFilter( QgsRasterResampleFilter* resampleFilter );
+    const QgsRasterResampleFilter* resampleFilter() const { return mResampleFilter; }
+    QgsRasterResampleFilter * resampleFilter() { return mResampleFilter; }
 
     /** \brief Accessor to find out how many standard deviations are being plotted */
     double standardDeviations() const { return mStandardDeviations; }
@@ -941,6 +947,7 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
     QString mCrs;
 
     QgsRasterRenderer* mRenderer;
+    QgsRasterResampleFilter *mResampleFilter;
 };
 
 #endif

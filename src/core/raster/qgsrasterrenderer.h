@@ -59,17 +59,6 @@ class QgsRasterRenderer : public QgsRasterFace
     void setInvertColor( bool invert ) { mInvertColor = invert; }
     bool invertColor() const { return mInvertColor; }
 
-    /**Set resampler for zoomed in scales. Takes ownership of the object*/
-    void setZoomedInResampler( QgsRasterResampler* r );
-    const QgsRasterResampler* zoomedInResampler() const { return mZoomedInResampler; }
-
-    /**Set resampler for zoomed out scales. Takes ownership of the object*/
-    void setZoomedOutResampler( QgsRasterResampler* r );
-    const QgsRasterResampler* zoomedOutResampler() const { return mZoomedOutResampler; }
-
-    void setMaxOversampling( double os ) { mMaxOversampling = os; }
-    double maxOversampling() const { return mMaxOversampling; }
-
     virtual void writeXML( QDomDocument& doc, QDomElement& parentElem ) const = 0;
 
     /**Sets base class members from xml. Usually called from create() methods of subclasses*/
