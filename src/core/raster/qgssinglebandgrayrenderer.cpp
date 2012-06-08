@@ -63,6 +63,7 @@ void QgsSingleBandGrayRenderer::setContrastEnhancement( QgsContrastEnhancement* 
 //void QgsSingleBandGrayRenderer::draw( QPainter* p, QgsRasterViewPort* viewPort, const QgsMapToPixel* theQgsMapToPixel )
 void * QgsSingleBandGrayRenderer::readBlock( int bandNo, QgsRectangle  const & extent, int width, int height )
 {
+  QgsDebugMsg( QString( "bandNo = %1" ).arg( bandNo ) );
   if ( !mInput )
   {
     return 0;
@@ -101,6 +102,8 @@ void * QgsSingleBandGrayRenderer::readBlock( int bandNo, QgsRectangle  const & e
     for ( int j = 0; j < width; ++j )
     {
       grayValOrig = grayVal = readValue( rasterData, rasterType, currentRasterPos );
+
+      //QgsDebugMsg( QString( "row = %1 col = %2 val = %3").arg(i).arg(j).arg( grayVal) );
 
       if ( mContrastEnhancement )
       {

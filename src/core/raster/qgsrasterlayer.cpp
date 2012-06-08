@@ -45,6 +45,7 @@ email                : tim at linfiniti.com
 #include "qgssinglebandgrayrenderer.h"
 
 #include "qgsrasterprojector.h"
+#include "qgsrasterkernel.h"
 
 #include <cstdio>
 #include <cmath>
@@ -1016,6 +1017,11 @@ void QgsRasterLayer::draw( QPainter * theQPainter,
     //QgsRasterDrawer drawer( mRenderer );
     //QgsRasterDrawer drawer( mResampleFilter );
 
+    QgsRasterKernel kernel( mDataProvider );
+
+    mRenderer->setInput( &kernel );
+    //mRenderer->setInput ( mDataProvider );
+
     double maxSrcXRes = 0;
     double maxSrcYRes = 0;
 
@@ -1031,6 +1037,8 @@ void QgsRasterLayer::draw( QPainter * theQPainter,
 
     QgsRasterDrawer drawer( &projector );
     drawer.draw( theQPainter, theRasterViewPort, theQgsMapToPixel );
+
+    mRenderer->setInput( 0 );
   }
 
   QgsDebugMsg( QString( "raster draw time (ms): %1" ).arg( time.elapsed() ) );

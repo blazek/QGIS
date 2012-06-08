@@ -68,7 +68,7 @@ void * QgsRasterResampleFilter::readBlock( int bandNo, QgsRectangle  const & ext
   {
     // TODO: we must get it somehow from pipe (via projector), for now
     oversampling = 2.;
-    /* 
+    /*
     QgsRectangle providerExtent = mInput->extent();
     if ( viewPort->mSrcCRS.isValid() && viewPort->mDestCRS.isValid() && viewPort->mSrcCRS != viewPort->mDestCRS )
     {
@@ -95,11 +95,11 @@ void * QgsRasterResampleFilter::readBlock( int bandNo, QgsRectangle  const & ext
   // TODO: we must also increase the extent to get correct result on borders of parts
 
 
-  int resWidth = width*oversamplingX;
-  int resHeight = height*oversamplingY;
+  int resWidth = width * oversamplingX;
+  int resHeight = height * oversamplingY;
 
-  // At moment we know that we read rendered image 
-  int bandNumber = 0;
+  // At moment we know that we read rendered image
+  int bandNumber = 1;
   void *rasterData = mInput->readBlock( bandNumber, extent, resWidth, resHeight );
 
   //resample image
@@ -130,7 +130,7 @@ void * QgsRasterResampleFilter::readBlock( int bandNo, QgsRectangle  const & ext
   return rasterData; // No resampling
 }
 
-void QgsRasterResampleFilter::writeXML( QDomDocument& doc, QDomElement& parentElem ) 
+void QgsRasterResampleFilter::writeXML( QDomDocument& doc, QDomElement& parentElem )
 {
   if ( parentElem.isNull() )
   {
