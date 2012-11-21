@@ -25,7 +25,9 @@ extern "C"
 
 #include <stdexcept>
 #include "qgsexception.h"
+#include <qgsproviderregistry.h>
 #include <qgsrectangle.h>
+#include <qgsrasterdataprovider.h>
 
 #include <QLibrary>
 #include <QProcess>
@@ -39,15 +41,39 @@ class QgsRectangle;
 class GRASS_LIB_EXPORT QgsGrassGisLib
 {
   public:
+    // Region term is used in modules (g.region), internaly it is hold in structure 
+    // Cell_head, but variables keeping that struture are usually called window
+    /*
+    class Region 
+    {
+      QgsRectangle extent;
+      double ewRes; // east-west resolution
+      double nsRes; // north south resolution
+    };
+    */
+    
+    class Raster
+    {
+      public:
+        QgsRasterDataProvider *provider;
+        Raster(): provider(0) {}
+    };
+
     static GRASS_LIB_EXPORT QgsGrassGisLib* instance();
 
     QgsGrassGisLib();
 
     int G__gisinit(const char * version, const char * programName);
+    char *G_find_cell2(const char * name, const char * mapset);
+    int G_open_cell_old(const char *name, const char *mapset);
 
     void * resolve( const char * symbol );
 
+    // Print error function set to be called by GRASS lib
     static int errorRoutine( const char *msg, int fatal );
+
+    // Error called by fake lib
+    void fatal( QString msg );
 
   private:
     /** pointer to canonical Singleton object */
@@ -55,6 +81,9 @@ class GRASS_LIB_EXPORT QgsGrassGisLib
 
     /** Original GRASS library handle */
     QLibrary mLibrary;
+
+    /** Raster maps, key is fake file descriptor  */
+    QMap<int,Raster> mRasters;
 };
 
 #endif // QGSGRASSGISLIB_H

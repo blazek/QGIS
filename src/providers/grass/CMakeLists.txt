@@ -58,11 +58,19 @@ IF (NOT WIN32 AND NOT APPLE)
 # Generate functions mapping for funcions used in original version
 # Create list of functions to be mapped
 SET ( FUNCTIONS 
+  "G_adjust_Cell_head"
   "G_define_flag"
   "G_define_module"
   "G_define_option"
-  "G_parser"
   "G_define_standard_option"
+  #"G_parser"
+  "G__realloc"
+  "G_set_gisrc_mode"
+  "G_setenv"
+  "G_set_window"
+  "G_suppress_masking"
+  "G_window_cols"
+  "G_window_rows"
 )
 
 # Read GRASS header file and create functions mapping
