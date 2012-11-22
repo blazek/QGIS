@@ -55,9 +55,13 @@ class GRASS_LIB_EXPORT QgsGrassGisLib
     class Raster
     {
       public:
+        int fd; // fake file descriptor
+        QString name; // name passed from grass module, uri
         QgsRasterDataProvider *provider;
+        //QgsRasterFileWriter *writer;
         int band;
-        Raster(): provider( 0 ), band( 1 ) {}
+        int row; // next row to be written
+        Raster(): provider( 0 ), band( 1 ), row( 0 ) {}
 
     };
 
@@ -68,9 +72,26 @@ class GRASS_LIB_EXPORT QgsGrassGisLib
     int G__gisinit( const char * version, const char * programName );
     char *G_find_cell2( const char * name, const char * mapset );
     int G_open_cell_old( const char *name, const char *mapset );
+    int G_open_raster_new( const char *name, RASTER_MAP_TYPE wr_type );
+    int G_close_cell( int fd );
     int G_raster_map_is_fp( const char *name, const char *mapset );
     int G_read_fp_range( const char *name, const char *mapset, struct FPRange *drange );
+
+    int readRasterRow( int fd, char * buf, int row, RASTER_MAP_TYPE data_type );
     int G_get_c_raster_row( int fd, CELL * buf, int row );
+    int G_get_d_raster_row_nomask( int fd, DCELL * buf, int row );
+    int G_put_raster_row( int fd, const void *buf, RASTER_MAP_TYPE data_type );
+    int G_get_cellhd( const char *name, const char *mapset, struct Cell_head *cellhd );
+
+    QgsRasterBlock::DataType qgisRasterType( RASTER_MAP_TYPE grassType );
+    //RASTER_MAP_TYPE grassRasterType ( QgsRasterBlock::DataType qgisType );
+
+    /** Grass does not seem to have any function to init Cell_head,
+     * initialisation is done in G__read_Cell_head_array */
+    void initCellHead( struct Cell_head *cellhd );
+
+    /** Get raster from map of opened rasters, open it if it is not yet open */
+    Raster raster( QString name );
 
     void * resolve( const char * symbol );
 
@@ -89,6 +110,8 @@ class GRASS_LIB_EXPORT QgsGrassGisLib
 
     /** Raster maps, key is fake file descriptor  */
     QMap<int, Raster> mRasters;
+
+    struct Cell_head mWindow;
 
     /** Current region extent */
     QgsRectangle mExtent;

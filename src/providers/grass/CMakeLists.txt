@@ -58,28 +58,45 @@ IF (NOT WIN32 AND NOT APPLE)
 # Generate functions mapping for funcions used in original version
 # Create list of functions to be mapped
 SET ( FUNCTIONS 
+  "G_add_color_rule"
   "G_adjust_Cell_head"
+  "G_align_window"
   "G_allocate_cell_buf"
+  "G_allocate_raster_buf"
   "G__calloc"
+  "G_col_to_easting"
   "G_define_flag"
   "G_define_module"
   "G_define_option"
   "G_define_standard_option"
   "G_free"
   "G_get_fp_range_min_max"
-  "G_init_fp_range"
+  "G_get_window"
+  "G_get_set_window"
   "G__init_null_patterns"
+  "G_incr_void_ptr"
+  "G_init_colors"
+  "G_init_fp_range"
+  "G_init_raster_cats"
   "G_is_c_null_value"
+  "G_is_d_null_value"
   "G__malloc"
   "G_percent"
+  "G_projection"
   "G_quant_add_rule"
   "G_quant_free"
   "G_quant_get_limits"
   "G_quant_init"
   "G__realloc"
+  "G_raster_size"
+  "G_row_to_northing"
   "G_set_c_null_value"
+  "G_set_d_null_value"
+  "G_set_d_raster_cat"
   "G_set_gisrc_mode"
   "G_set_null_value"
+  "G_set_raster_cats_title"
+  "G_set_raster_value_d"
   "G_set_window"
   "G_setenv"
   "G_strip"
@@ -108,6 +125,7 @@ LIST ( APPEND FUNCTIONS_MAP "#include \"qgslogger.h\"\n" )
 LIST ( APPEND FUNCTIONS_MAP "#include \"qgis.h\"\n" )
 FOREACH( ROW ${HEADER_FILE} )
   STRING(REGEX REPLACE "\n" " " ROW "${ROW}")
+  STRING(REGEX REPLACE "__attribute__.*" "" ROW "${ROW}")
   #MESSAGE (STATUS, "ROW: ${ROW}") 
   # Parse function declaration
   #STRING(REGEX REPLACE "/\\*.*\\*/" "" ROW ${ROW}) # moved before
