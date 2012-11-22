@@ -41,31 +41,36 @@ class QgsRectangle;
 class GRASS_LIB_EXPORT QgsGrassGisLib
 {
   public:
-    // Region term is used in modules (g.region), internaly it is hold in structure 
+    // Region term is used in modules (g.region), internaly it is hold in structure
     // Cell_head, but variables keeping that struture are usually called window
     /*
-    class Region 
+    class Region
     {
       QgsRectangle extent;
       double ewRes; // east-west resolution
       double nsRes; // north south resolution
     };
     */
-    
+
     class Raster
     {
       public:
         QgsRasterDataProvider *provider;
-        Raster(): provider(0) {}
+        int band;
+        Raster(): provider( 0 ), band( 1 ) {}
+
     };
 
     static GRASS_LIB_EXPORT QgsGrassGisLib* instance();
 
     QgsGrassGisLib();
 
-    int G__gisinit(const char * version, const char * programName);
-    char *G_find_cell2(const char * name, const char * mapset);
-    int G_open_cell_old(const char *name, const char *mapset);
+    int G__gisinit( const char * version, const char * programName );
+    char *G_find_cell2( const char * name, const char * mapset );
+    int G_open_cell_old( const char *name, const char *mapset );
+    int G_raster_map_is_fp( const char *name, const char *mapset );
+    int G_read_fp_range( const char *name, const char *mapset, struct FPRange *drange );
+    int G_get_c_raster_row( int fd, CELL * buf, int row );
 
     void * resolve( const char * symbol );
 
@@ -83,7 +88,14 @@ class GRASS_LIB_EXPORT QgsGrassGisLib
     QLibrary mLibrary;
 
     /** Raster maps, key is fake file descriptor  */
-    QMap<int,Raster> mRasters;
+    QMap<int, Raster> mRasters;
+
+    /** Current region extent */
+    QgsRectangle mExtent;
+    /** Current region rows */
+    int mRows;
+    /** Current region columns */
+    int mColumns;
 };
 
 #endif // QGSGRASSGISLIB_H
