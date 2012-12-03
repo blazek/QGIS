@@ -50,14 +50,29 @@ class QgsGrassModule: public QDialog, private  Ui::QgsGrassModuleBase
     Q_OBJECT
 
   public:
+    class Description
+    {
+      public:
+        QString label;
+        // supported by GRASS Direct
+        bool direct;
+        Description(): direct( true ) {}
+        Description( QString lab, bool dir = false ): label( lab ), direct( dir ) { }
+        Description( const Description & desc ) { label = desc.label; direct =  desc.direct; }
+        Description( Description & desc ) { label = desc.label; direct =  desc.direct; }
+    };
+
     //! Constructor
     QgsGrassModule( QgsGrassTools *tools, QString moduleName, QgisInterface *iface,
-                    QString path, QWidget *parent, Qt::WFlags f = 0 );
+                    QString path, bool direct, QWidget *parent, Qt::WFlags f = 0 );
 
     //! Destructor
     ~QgsGrassModule();
 
     QString translate( QString string );
+
+    //! Returns module description (info from .qgs file) for module description path
+    static Description description( QString path );
 
     //! Returns module label for module description path
     static QString label( QString path );
@@ -161,6 +176,9 @@ class QgsGrassModule: public QDialog, private  Ui::QgsGrassModuleBase
 
     //! True if the module successfully finished
     bool mSuccess;
+
+    //! Direct mode
+    bool mDirect;
 };
 
 /*! \class QgsGrassModuleOptions
@@ -173,7 +191,7 @@ class QgsGrassModuleOptions
     //! Constructor
     QgsGrassModuleOptions(
       QgsGrassTools *tools, QgsGrassModule *module,
-      QgisInterface *iface );
+      QgisInterface *iface, bool direct );
 
     //! Destructor
     virtual ~QgsGrassModuleOptions();
@@ -242,6 +260,9 @@ class QgsGrassModuleOptions
 
     //! QGIS directory
     QString mAppDir;
+
+    //! Direct mode
+    bool mDirect;
 };
 
 /*! \class QgsGrassModuleStandardOptions
@@ -258,7 +279,7 @@ class QgsGrassModuleStandardOptions: QWidget, public QgsGrassModuleOptions
       QgsGrassTools *tools, QgsGrassModule *module,
       QgisInterface *iface,
       QString xname, QDomElement docElem,
-      QWidget * parent = 0, Qt::WFlags f = 0 );
+      bool direct, QWidget * parent = 0, Qt::WFlags f = 0 );
 
     //! Destructor
     ~QgsGrassModuleStandardOptions();
@@ -584,7 +605,7 @@ class QgsGrassModuleInput: public QgsGrassModuleGroupBoxItem
     QgsGrassModuleInput( QgsGrassModule *module,
                          QgsGrassModuleStandardOptions *options, QString key,
                          QDomElement &qdesc, QDomElement &gdesc, QDomNode &gnode,
-                         QWidget * parent = 0 );
+                         bool direct, QWidget * parent = 0 );
 
     //! Destructor
     ~QgsGrassModuleInput();
@@ -675,6 +696,9 @@ class QgsGrassModuleInput: public QgsGrassModuleGroupBoxItem
 
     //! Required field
     bool mRequired;
+
+    //! Direct mode
+    bool mDirect;
 };
 
 /*********************** QgsGrassModuleGdalInput **********************/

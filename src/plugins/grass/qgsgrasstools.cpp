@@ -62,19 +62,18 @@ QgsGrassTools::QgsGrassTools( QgisInterface *iface,
   connect( qApp, SIGNAL( aboutToQuit() ),
            this, SLOT( closeTools() ) );
 
-  //
-  // Radims original tree view code.
-  //
+  // Tree view code.
   mModulesTree->header()->hide();
   connect( mModulesTree, SIGNAL( itemClicked( QTreeWidgetItem *, int ) ),
            this, SLOT( moduleClicked( QTreeWidgetItem *, int ) ) );
+  mDirectModulesTree->header()->hide();
+  connect( mDirectModulesTree, SIGNAL( itemClicked( QTreeWidgetItem *, int ) ),
+           this, SLOT( directModuleClicked( QTreeWidgetItem *, int ) ) );
 
-  //
-  // Tims experimental list view with filter
-  //
-  mModelTools = new QStandardItemModel( 0, 1 );
+  // List view with filter
+  mModulesListModel = new QStandardItemModel( 0, 1 );
   mModelProxy = new QSortFilterProxyModel( this );
-  mModelProxy->setSourceModel( mModelTools );
+  mModelProxy->setSourceModel( mModulesListModel );
   mModelProxy->setFilterRole( Qt::UserRole + 2 );
 
   mListView->setModel( mModelProxy );
@@ -88,9 +87,15 @@ QgsGrassTools::QgsGrassTools( QgisInterface *iface,
   //mIface->addDockWidget(Qt::LeftDockWidgetArea, mDockWidget);
   connect( mListView, SIGNAL( clicked( const QModelIndex ) ),
            this, SLOT( listItemClicked( const QModelIndex ) ) );
-  //
-  // End of Tims experimental bit
-  //
+
+  mDirectModulesListModel = new QStandardItemModel( 0, 1 );
+  mDirectModelProxy = new QSortFilterProxyModel( this );
+  mDirectModelProxy->setSourceModel( mDirectModulesListModel );
+  mDirectModelProxy->setFilterRole( Qt::UserRole + 2 );
+
+  mDirectListView->setModel( mDirectModelProxy );
+  connect( mDirectListView, SIGNAL( clicked( const QModelIndex ) ),
+           this, SLOT( directListItemClicked( const QModelIndex ) ) );
 
   //
   // Load the modules lists
@@ -100,7 +105,9 @@ QgsGrassTools::QgsGrassTools( QgisInterface *iface,
   restorePosition();
 
   QApplication::setOverrideCursor( Qt::WaitCursor );
-  loadConfig( conf );
+  //loadConfig( conf, mModulesTree, mModulesListModel, false );
+  loadConfig( conf, mDirectModulesTree, mDirectModulesListModel, true );
+
   QApplication::restoreOverrideCursor();
   //statusBar()->hide();
 
@@ -108,13 +115,17 @@ QgsGrassTools::QgsGrassTools( QgisInterface *iface,
   QString title = tr( "GRASS Tools: %1/%2" ).arg( QgsGrass::getDefaultLocation() ).arg( QgsGrass::getDefaultMapset() );
   setWindowTitle( title );
 
-
   // Add map browser
   mBrowser = new QgsGrassBrowser( mIface, this );
   mTabWidget->addTab( mBrowser, tr( "Browser" ) );
 
   connect( mBrowser, SIGNAL( regionChanged() ),
            this, SLOT( emitRegionChanged() ) );
+
+  if ( !QgsGrass::activeMode() )
+  {
+    mBrowser->hide();
+  }
 }
 
 void QgsGrassTools::moduleClicked( QTreeWidgetItem * item, int column )
@@ -126,10 +137,22 @@ void QgsGrassTools::moduleClicked( QTreeWidgetItem * item, int column )
 
   QString name = item->text( 1 );
   QgsDebugMsg( QString( "name = %1" ).arg( name ) );
-  runModule( name );
+  runModule( name, false );
 }
 
-void QgsGrassTools::runModule( QString name )
+void QgsGrassTools::directModuleClicked( QTreeWidgetItem * item, int column )
+{
+  Q_UNUSED( column );
+  QgsDebugMsg( "entered." );
+  if ( !item )
+    return;
+
+  QString name = item->text( 1 );
+  QgsDebugMsg( QString( "name = %1" ).arg( name ) );
+  runModule( name, true );
+}
+
+void QgsGrassTools::runModule( QString name, bool direct )
 {
   if ( name.length() == 0 )
     return;  // Section
@@ -163,7 +186,7 @@ void QgsGrassTools::runModule( QString name )
   }
   else
   {
-    QgsGrassModule *gmod = new QgsGrassModule( this, name, mIface, path, mTabWidget );
+    QgsGrassModule *gmod = new QgsGrassModule( this, name, mIface, path, direct, mTabWidget );
     connect( gmod, SIGNAL( moduleStarted() ), mBrowser, SLOT( moduleStarted() ) );
     connect( gmod, SIGNAL( moduleFinished() ), mBrowser, SLOT( moduleFinished() ) );
 
@@ -201,11 +224,11 @@ void QgsGrassTools::runModule( QString name )
 #endif
 }
 
-bool QgsGrassTools::loadConfig( QString filePath )
+bool QgsGrassTools::loadConfig( QString filePath, QTreeWidget *modulesTreeWidget, QStandardItemModel * modulesListModel, bool direct )
 {
   QgsDebugMsg( filePath );
-  mModulesTree->clear();
-  mModulesTree->setIconSize( QSize( 80, 22 ) );
+  modulesTreeWidget->clear();
+  modulesTreeWidget->setIconSize( QSize( 80, 22 ) );
 
   QFile file( filePath );
 
@@ -246,15 +269,18 @@ bool QgsGrassTools::loadConfig( QString filePath )
   QDomElement modulesElem = modulesNode.toElement();
 
   // Go through the sections and modules and add them to the list view
-  addModules( 0, modulesElem );
-
-  mModulesTree->topLevelItem( 0 )->setExpanded( true );
+  addModules( 0, modulesElem, modulesTreeWidget, modulesListModel, direct );
+  if ( direct )
+  {
+    removeEmptyItems( modulesTreeWidget );
+  }
+  modulesTreeWidget->topLevelItem( 0 )->setExpanded( true );
 
   file.close();
   return true;
 }
 
-void QgsGrassTools::addModules( QTreeWidgetItem *parent, QDomElement &element )
+void QgsGrassTools::addModules( QTreeWidgetItem *parent, QDomElement &element, QTreeWidget *modulesTreeWidget, QStandardItemModel * modulesListModel, bool direct )
 {
   QDomNode n = element.firstChild();
 
@@ -289,7 +315,7 @@ void QgsGrassTools::addModules( QTreeWidgetItem *parent, QDomElement &element )
       }
       else
       {
-        item = new QTreeWidgetItem( mModulesTree, lastItem );
+        item = new QTreeWidgetItem( modulesTreeWidget, lastItem );
       }
 
       if ( e.tagName() == "section" )
@@ -299,7 +325,7 @@ void QgsGrassTools::addModules( QTreeWidgetItem *parent, QDomElement &element )
         item->setText( 0, label );
         item->setExpanded( false );
 
-        addModules( item, e );
+        addModules( item, e, modulesTreeWidget, modulesListModel, direct );
 
         lastItem = item;
       }
@@ -309,41 +335,78 @@ void QgsGrassTools::addModules( QTreeWidgetItem *parent, QDomElement &element )
         QgsDebugMsg( QString( "name = %1" ).arg( name ) );
 
         QString path = QgsApplication::pkgDataPath() + "/grass/modules/" + name;
-        QString label = QgsGrassModule::label( path );
-        QPixmap pixmap = QgsGrassModule::pixmap( path, 32 );
+        QgsGrassModule::Description description = QgsGrassModule::description( path );
 
-        item->setText( 0, name + " - " + label );
-        item->setIcon( 0, QIcon( pixmap ) );
-        item->setText( 1, name );
-        lastItem = item;
+        if ( !direct || description.direct )
+        {
+          QString label = description.label;
+          QPixmap pixmap = QgsGrassModule::pixmap( path, 32 );
 
+          item->setText( 0, name + " - " + label );
+          item->setIcon( 0, QIcon( pixmap ) );
+          item->setText( 1, name );
+          lastItem = item;
 
-        //
-        // Experimental work by Tim - add this item to our list model
-        //
-        QStandardItem * mypDetailItem = new QStandardItem( name + "\n" + label );
-        mypDetailItem->setData( name, Qt::UserRole + 1 ); //for calling runModule later
-        QString mySearchText = name + " - " + label;
-        mypDetailItem->setData( mySearchText, Qt::UserRole + 2 ); //for filtering later
-        mypDetailItem->setData( pixmap, Qt::DecorationRole );
-        mypDetailItem->setCheckable( false );
-        mypDetailItem->setEditable( false );
-        // setData in the delegate with a variantised QgsDetailedItemData
-        QgsDetailedItemData myData;
-        myData.setTitle( name );
-        myData.setDetail( label );
-        myData.setIcon( pixmap );
-        myData.setCheckable( false );
-        myData.setRenderAsWidget( false );
-        QVariant myVariant = qVariantFromValue( myData );
-        mypDetailItem->setData( myVariant, Qt::UserRole );
-        mModelTools->appendRow( mypDetailItem );
-        //
-        // End of experimental work by Tim
-        //
+          // Add this item to our list model
+          QStandardItem * mypDetailItem = new QStandardItem( name + "\n" + label );
+          mypDetailItem->setData( name, Qt::UserRole + 1 ); //for calling runModule later
+          QString mySearchText = name + " - " + label;
+          mypDetailItem->setData( mySearchText, Qt::UserRole + 2 ); //for filtering later
+          mypDetailItem->setData( pixmap, Qt::DecorationRole );
+          mypDetailItem->setCheckable( false );
+          mypDetailItem->setEditable( false );
+          // setData in the delegate with a variantised QgsDetailedItemData
+          QgsDetailedItemData myData;
+          myData.setTitle( name );
+          myData.setDetail( label );
+          myData.setIcon( pixmap );
+          myData.setCheckable( false );
+          myData.setRenderAsWidget( false );
+          QVariant myVariant = qVariantFromValue( myData );
+          mypDetailItem->setData( myVariant, Qt::UserRole );
+          modulesListModel->appendRow( mypDetailItem );
+        }
+        else
+        {
+          delete item;
+        }
       }
     }
     n = n.nextSibling();
+  }
+
+}
+
+void QgsGrassTools::removeEmptyItems( QTreeWidget *tree )
+{
+  // Clean tree nodes without children
+  for ( int i = tree->topLevelItemCount() - 1; i >= 0; i-- )
+  {
+    QTreeWidgetItem *sub = tree->topLevelItem( i );
+    removeEmptyItems( sub );
+    if ( sub->childCount() == 0 )
+    {
+      tree->removeItemWidget( sub, 0 );
+      tree->takeTopLevelItem( i );
+      delete sub;
+    }
+  }
+}
+
+void QgsGrassTools::removeEmptyItems( QTreeWidgetItem *item )
+{
+  for ( int i = item->childCount() - 1; i >= 0; i-- )
+  {
+
+    QTreeWidgetItem *sub = item->child( i );
+    QString name = sub->text( 1 ); //module name
+    if ( !name.isEmpty() ) continue; // module
+    removeEmptyItems( sub );
+    if ( sub->childCount() == 0 )
+    {
+      item->removeChild( sub );
+      delete sub;
+    }
   }
 }
 
@@ -430,6 +493,15 @@ void QgsGrassTools::on_mFilterInput_textChanged( QString theText )
   mModelProxy->setFilterRegExp( myRegExp );
 }
 
+void QgsGrassTools::on_mDirectFilterInput_textChanged( QString theText )
+{
+  QgsDebugMsg( "GRASS direct modules filter changed to :" + theText );
+  QRegExp::PatternSyntax mySyntax = QRegExp::PatternSyntax( QRegExp::RegExp );
+  Qt::CaseSensitivity myCaseSensitivity = Qt::CaseInsensitive;
+  QRegExp myRegExp( theText, myCaseSensitivity, mySyntax );
+  mDirectModelProxy->setFilterRegExp( myRegExp );
+}
+
 void QgsGrassTools::listItemClicked( const QModelIndex &theIndex )
 {
   if ( theIndex.column() == 0 )
@@ -440,9 +512,24 @@ void QgsGrassTools::listItemClicked( const QModelIndex &theIndex )
     // little hoop to get the correct item
     //
     QStandardItem * mypItem =
-      mModelTools->findItems( theIndex.data( Qt::DisplayRole ).toString() ).first();
+      mModulesListModel->findItems( theIndex.data( Qt::DisplayRole ).toString() ).first();
     QString myModuleName = mypItem->data( Qt::UserRole + 1 ).toString();
-    runModule( myModuleName );
+    runModule( myModuleName, false );
   }
 }
 
+void QgsGrassTools::directListItemClicked( const QModelIndex &theIndex )
+{
+  if ( theIndex.column() == 0 )
+  {
+    //
+    // If the model has been filtered, the index row in the proxy wont match
+    // the index row in the underlying model so we need to jump through this
+    // little hoop to get the correct item
+    //
+    QStandardItem * mypItem =
+      mDirectModulesListModel->findItems( theIndex.data( Qt::DisplayRole ).toString() ).first();
+    QString myModuleName = mypItem->data( Qt::UserRole + 1 ).toString();
+    runModule( myModuleName, true );
+  }
+}
