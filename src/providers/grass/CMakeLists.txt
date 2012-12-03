@@ -71,6 +71,7 @@ SET ( FUNCTIONS
   "G_define_standard_option"
   "G_free"
   "G_get_fp_range_min_max"
+  "G_get_range_min_max"
   "G_get_window"
   "G_get_set_window"
   "G__init_null_patterns"
@@ -78,10 +79,12 @@ SET ( FUNCTIONS
   "G_init_colors"
   "G_init_fp_range"
   "G_init_raster_cats"
+  "G_init_range"
   "G_is_c_null_value"
   "G_is_d_null_value"
   "G__malloc"
   "G_percent"
+  "G_program_name"
   "G_projection"
   "G_quant_add_rule"
   "G_quant_free"
@@ -103,8 +106,10 @@ SET ( FUNCTIONS
   "G_suppress_masking"
   "G_trim_decimal"
   "G_update_fp_range"
+  "G_update_range"
   "G_window_cols"
   "G_window_rows"
+  "G_zero"
 )
 
 # Read GRASS header file and create functions mapping

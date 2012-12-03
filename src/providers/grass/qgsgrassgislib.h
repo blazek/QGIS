@@ -24,7 +24,9 @@ extern "C"
 }
 
 #include <stdexcept>
-#include "qgsexception.h"
+#include <qgscoordinatereferencesystem.h>
+#include <qgsdistancearea.h>
+#include <qgsexception.h>
 #include <qgsproviderregistry.h>
 #include <qgsrectangle.h>
 #include <qgsrasterdataprovider.h>
@@ -74,17 +76,23 @@ class GRASS_LIB_EXPORT QgsGrassGisLib
     int G_open_cell_old( const char *name, const char *mapset );
     int G_open_raster_new( const char *name, RASTER_MAP_TYPE wr_type );
     int G_close_cell( int fd );
-    int G_raster_map_is_fp( const char *name, const char *mapset );
+    RASTER_MAP_TYPE G_raster_map_type( const char *name, const char *mapset );
+    RASTER_MAP_TYPE G_get_raster_map_type( int fd );
+    //int G_raster_map_is_fp( const char *name, const char *mapset );
     int G_read_fp_range( const char *name, const char *mapset, struct FPRange *drange );
 
-    int readRasterRow( int fd, char * buf, int row, RASTER_MAP_TYPE data_type );
-    int G_get_c_raster_row( int fd, CELL * buf, int row );
-    int G_get_d_raster_row_nomask( int fd, DCELL * buf, int row );
+    int readRasterRow( int fd, void * buf, int row, RASTER_MAP_TYPE data_type, bool noDataAsZero = false );
     int G_put_raster_row( int fd, const void *buf, RASTER_MAP_TYPE data_type );
     int G_get_cellhd( const char *name, const char *mapset, struct Cell_head *cellhd );
 
+    double G_database_units_to_meters_factor( void );
+    double G_distance( double e1, double n1, double e2, double n2 );
+
+    /** Get QGIS raster type for GRASS raster type */
     QgsRasterBlock::DataType qgisRasterType( RASTER_MAP_TYPE grassType );
-    //RASTER_MAP_TYPE grassRasterType ( QgsRasterBlock::DataType qgisType );
+
+    /** Get GRASS raster type for QGIS raster type */
+    RASTER_MAP_TYPE grassRasterType( QgsRasterBlock::DataType qgisType );
 
     /** Grass does not seem to have any function to init Cell_head,
      * initialisation is done in G__read_Cell_head_array */
@@ -100,6 +108,7 @@ class GRASS_LIB_EXPORT QgsGrassGisLib
 
     // Error called by fake lib
     void fatal( QString msg );
+    void warning( QString msg );
 
   private:
     /** pointer to canonical Singleton object */
@@ -119,6 +128,9 @@ class GRASS_LIB_EXPORT QgsGrassGisLib
     int mRows;
     /** Current region columns */
     int mColumns;
+    /** Current coordinate reference system */
+    QgsCoordinateReferenceSystem mCrs;
+    QgsDistanceArea mDistanceArea;
 };
 
 #endif // QGSGRASSGISLIB_H
