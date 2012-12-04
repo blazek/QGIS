@@ -25,6 +25,8 @@
 
 #include "qgisinterface.h"
 #include "qgsapplication.h"
+#include "qgscoordinatereferencesystem.h"
+#include "qgscoordinatetransform.h"
 #include "qgsdataprovider.h"
 #include "qgsdatasourceuri.h"
 #include "qgsfeature.h"
@@ -453,6 +455,17 @@ QgsGrassModuleStandardOptions::QgsGrassModuleStandardOptions(
   mypScrollArea->setWidget( mypInnerFrame );
   mypScrollArea->setWidgetResizable( true );
   QVBoxLayout *mypInnerFrameLayout = new QVBoxLayout( mypInnerFrame );
+
+  QFrame * mypRegionModeFrame = new QFrame();
+  QHBoxLayout * mypRegionModeFrameLayout = new QHBoxLayout( mypRegionModeFrame );
+  QLabel * mypRegionModeLabel = new QLabel( tr( "Region" ) );
+  mRegionModeComboBox = new QComboBox();
+  mRegionModeComboBox->addItem( tr( "Input layers" ), RegionInput );
+  mRegionModeComboBox->addItem( tr( "Current map canvas" ), RegionCurrent );
+  mRegionModeComboBox->setSizePolicy( QSizePolicy( QSizePolicy::Expanding, QSizePolicy::Preferred ) );
+  mypRegionModeFrameLayout->addWidget( mypRegionModeLabel );
+  mypRegionModeFrameLayout->addWidget( mRegionModeComboBox );
+
   // Add frames for simple/advanced options
   QFrame * mypSimpleFrame = new QFrame();
   mypSimpleFrame->setFrameShape( QFrame::NoFrame );
@@ -465,6 +478,11 @@ QgsGrassModuleStandardOptions::QgsGrassModuleStandardOptions(
   connect( &mAdvancedPushButton, SIGNAL( clicked() ), this, SLOT( switchAdvanced() ) );
   mypAdvancedPushButtonFrameLayout->addWidget( &mAdvancedPushButton );
   mypAdvancedPushButtonFrameLayout->addStretch( 1 );
+
+  if ( mDirect )
+  {
+    mypInnerFrameLayout->addWidget( mypRegionModeFrame );
+  }
 
   mypInnerFrameLayout->addWidget( mypSimpleFrame );
   mypInnerFrameLayout->addWidget( mypAdvancedPushButtonFrame );
@@ -993,87 +1011,208 @@ QStringList QgsGrassModuleStandardOptions::checkRegion()
   return list;
 }
 
-bool QgsGrassModuleStandardOptions::inputRegion( struct Cell_head *window, bool all )
+bool QgsGrassModuleStandardOptions::inputRegion( struct Cell_head *window, QgsCoordinateReferenceSystem &crs, bool all )
 {
   QgsDebugMsg( "called." );
 
-  // Get current resolution
-  if ( !QgsGrass::region( QgsGrass::getDefaultGisdbase(),
-                          QgsGrass::getDefaultLocation(),
-                          QgsGrass::getDefaultMapset(), window ) )
+  RegionMode mode = ( QgsGrassModuleOptions::RegionMode ) mRegionModeComboBox->itemData( mRegionModeComboBox->currentIndex() ).toInt();
+  if ( mDirect && mode == RegionCurrent )
   {
-    QMessageBox::warning( 0, tr( "Warning" ), tr( "Cannot get current region" ) );
-    return false;
-  }
-
-  int rasterCount = 0;
-  int vectorCount = 0;
-  for ( unsigned int i = 0; i < mItems.size(); i++ )
-  {
-    struct Cell_head mapWindow;
-
-    QgsGrassModuleInput *item = dynamic_cast<QgsGrassModuleInput *>( mItems[i] );
-    if ( !item )
-      continue;
-
-    if ( !all && !item->useRegion() )
-      continue;
-
-    QgsGrass::MapType mapType = QgsGrass::Vector;
-
-    switch ( item->type() )
+    // TODO: warn if outside region
+    if ( mCanvas->hasCrsTransformEnabled() )
     {
-      case QgsGrassModuleInput::Raster :
-        mapType = QgsGrass::Raster;
-        break;
-      case QgsGrassModuleInput::Vector :
-        mapType = QgsGrass::Vector;
-        break;
-    }
-
-    QStringList mm = item->currentMap().split( "@" );
-    QString map = mm.at( 0 );
-    QString mapset = QgsGrass::getDefaultMapset();
-    if ( mm.size() > 1 )
-      mapset = mm.at( 1 );
-    if ( !QgsGrass::mapRegion( mapType,
-                               QgsGrass::getDefaultGisdbase(),
-                               QgsGrass::getDefaultLocation(), mapset, map,
-                               &mapWindow ) )
-    {
-      QMessageBox::warning( 0, tr( "Warning" ), tr( "Cannot set region of map %1" ).arg( item->currentMap() ) );
-      return false;
-    }
-
-    // TODO: best way to set resolution ?
-    if ( item->type() == QgsGrassModuleInput::Raster
-         && rasterCount == 0 )
-    {
-      QgsGrass::copyRegionResolution( &mapWindow, window );
-    }
-    if ( rasterCount + vectorCount == 0 )
-    {
-      QgsGrass::copyRegionExtent( &mapWindow, window );
+      crs = mCanvas->mapRenderer()->destinationCrs();
     }
     else
     {
-      QgsGrass::extendRegion( &mapWindow, window );
+      crs = QgsCoordinateReferenceSystem();
+    }
+    QgsRectangle rect = mCanvas->extent();
+
+    QgsGrass::initRegion( window );
+    window->west = rect.xMinimum();
+    window->south = rect.yMinimum();
+    window->east = rect.xMaximum();
+    window->north = rect.yMaximum();
+    window->rows = ( int ) mCanvas->mapRenderer()->outputSize().height();
+    window->cols = ( int ) mCanvas->mapRenderer()->outputSize().width();
+
+    char* err = G_adjust_Cell_head( window, 1, 1 );
+    if ( err )
+    {
+      QMessageBox::warning( 0, tr( "Warning" ), tr( "Cannot set region" ) + QString( err ) );
+      return false;
+    }
+  }
+  else
+  {
+    if ( mDirect )
+    {
+      QgsGrass::initRegion( window );
+    }
+    else
+    {
+      // Get current resolution
+      if ( !QgsGrass::region( QgsGrass::getDefaultGisdbase(),
+                              QgsGrass::getDefaultLocation(),
+                              QgsGrass::getDefaultMapset(), window ) )
+      {
+        QMessageBox::warning( 0, tr( "Warning" ), tr( "Cannot get current region" ) );
+        return false;
+      }
     }
 
-    if ( item->type() == QgsGrassModuleInput::Raster )
-      rasterCount++;
-    else if ( item->type() == QgsGrassModuleInput::Vector )
-      vectorCount++;
+    int rasterCount = 0;
+    int vectorCount = 0;
+    for ( unsigned int i = 0; i < mItems.size(); i++ )
+    {
+      struct Cell_head mapWindow;
+
+      QgsGrassModuleInput *item = dynamic_cast<QgsGrassModuleInput *>( mItems[i] );
+      if ( !item )
+        continue;
+
+      if ( mDirect )
+      {
+        QgsGrass::initRegion( &mapWindow );
+        QgsMapLayer * layer = item->currentLayer();
+        if ( !layer )
+        {
+          QMessageBox::warning( 0, tr( "Warning" ), tr( "Cannot get selected layer" ) );
+          return false;
+        }
+
+        QgsCoordinateReferenceSystem sourceCrs;
+        QgsRasterLayer* rasterLayer = 0;
+        QgsVectorLayer* vectorLayer = 0;
+        if ( layer->type() == QgsMapLayer::RasterLayer )
+        {
+          rasterLayer = qobject_cast<QgsRasterLayer *>( layer );
+          if ( !rasterLayer || !rasterLayer->dataProvider() )
+          {
+            QMessageBox::warning( 0, tr( "Warning" ), tr( "Cannot get provider" ) );
+            return false;
+          }
+          sourceCrs = rasterLayer->dataProvider()->crs();
+        }
+        else if ( layer->type() == QgsMapLayer::VectorLayer )
+        {
+          vectorLayer = qobject_cast<QgsVectorLayer *>( layer );
+          if ( !vectorLayer || !vectorLayer->dataProvider() )
+          {
+            QMessageBox::warning( 0, tr( "Warning" ), tr( "Cannot get provider" ) );
+            return false;
+          }
+          sourceCrs = vectorLayer->dataProvider()->crs();
+        }
+
+        QgsDebugMsg( "layer crs = " + layer->crs().toProj4() );
+        QgsDebugMsg( "source crs = " + sourceCrs.toProj4() );
+
+        // TODO: Problem: Layer may have defined in QGIS running application
+        // a different CRS from that defined in data source (provider)
+        // Currently we don't have system of passing such info to module
+        // and result may be wrong -> error in such cases
+        if ( layer->crs() != sourceCrs )
+        {
+          QMessageBox::warning( 0, tr( "Warning" ), tr( "The layer CRS (defined in QGIS) and data source CRS differ. We are not yet able to pass the layer CRS to GRASS module. Please set correct data source CRS or change layer CRS to data source CRS." ) );
+          return false;
+        }
+
+        QgsRectangle rect = layer->extent();
+        if ( rasterCount + vectorCount == 0 )
+        {
+          crs = layer->crs();
+        }
+        else if ( layer->crs() != crs )
+        {
+          QgsCoordinateTransform transform( layer->crs(), crs );
+          rect = transform.transformBoundingBox( rect );
+        }
+        QgsGrass::setRegion( &mapWindow, rect );
+
+        if ( layer->type() == QgsMapLayer::RasterLayer )
+        {
+          if ( !rasterLayer || !rasterLayer->dataProvider() )
+          {
+            QMessageBox::warning( 0, tr( "Warning" ), tr( "Cannot get raster provider" ) );
+            return false;
+          }
+          QgsRasterDataProvider *provider = qobject_cast<QgsRasterDataProvider*>( rasterLayer->dataProvider() );
+          mapWindow.cols = provider->xSize();
+          mapWindow.rows = provider->ySize();
+
+          char* err = G_adjust_Cell_head( &mapWindow, 1, 1 );
+          if ( err )
+          {
+            QMessageBox::warning( 0, tr( "Warning" ), tr( "Cannot set region" ) + QString( err ) );
+            return false;
+          }
+        }
+      }
+      else
+      {
+        if ( !all && !item->useRegion() )
+          continue;
+
+        QgsGrass::MapType mapType = QgsGrass::Vector;
+
+        switch ( item->type() )
+        {
+          case QgsGrassModuleInput::Raster :
+            mapType = QgsGrass::Raster;
+            break;
+          case QgsGrassModuleInput::Vector :
+            mapType = QgsGrass::Vector;
+            break;
+        }
+
+        QStringList mm = item->currentMap().split( "@" );
+        QString map = mm.at( 0 );
+        QString mapset = QgsGrass::getDefaultMapset();
+        if ( mm.size() > 1 )
+          mapset = mm.at( 1 );
+        if ( !QgsGrass::mapRegion( mapType,
+                                   QgsGrass::getDefaultGisdbase(),
+                                   QgsGrass::getDefaultLocation(), mapset, map,
+                                   &mapWindow ) )
+        {
+          QMessageBox::warning( 0, tr( "Warning" ), tr( "Cannot set region of map %1" ).arg( item->currentMap() ) );
+          return false;
+        }
+      }
+
+      // TODO: best way to set resolution ?
+      if ( item->type() == QgsGrassModuleInput::Raster
+           && rasterCount == 0 )
+      {
+        QgsGrass::copyRegionResolution( &mapWindow, window );
+      }
+      if ( rasterCount + vectorCount == 0 )
+      {
+        QgsGrass::copyRegionExtent( &mapWindow, window );
+      }
+      else
+      {
+        QgsGrass::extendRegion( &mapWindow, window );
+      }
+
+      if ( item->type() == QgsGrassModuleInput::Raster )
+        rasterCount++;
+      else if ( item->type() == QgsGrassModuleInput::Vector )
+        vectorCount++;
+    }
+
+    G_adjust_Cell_head3( window, 0, 0, 0 );
   }
-
-  G_adjust_Cell_head3( window, 0, 0, 0 );
-
   return true;
 }
 
 bool QgsGrassModuleStandardOptions::requestsRegion()
 {
   QgsDebugMsg( "called." );
+
+  if ( mDirect ) return true;
 
   for ( unsigned int i = 0; i < mItems.size(); i++ )
   {
@@ -1374,9 +1513,10 @@ void QgsGrassModule::run()
     // Check/set region
     struct Cell_head tempWindow;
     bool resetRegion = false;
-    if ( mOptions->requestsRegion() )
+    QgsCoordinateReferenceSystem crs;
+    if ( mOptions->requestsRegion() ) // direct always
     {
-      if ( !mOptions->inputRegion( &tempWindow, false ) )
+      if ( !mOptions->inputRegion( &tempWindow, crs, false ) )
       {
         QMessageBox::warning( 0, tr( "Warning" ), tr( "Cannot get input region" ) );
         return;
@@ -1385,94 +1525,56 @@ void QgsGrassModule::run()
     }
     else if ( mOptions->usesRegion() )
     {
-      if ( mDirect )
+      QStringList outsideRegion = mOptions->checkRegion();
+      if ( outsideRegion.size() > 0 )
       {
-        // TODO: also warn if outside region
-        // Take current extent
-        // TODO: projection
-        QgsRectangle rect = mCanvas->extent();
-
-        // TODO: move to lib
-        tempWindow.format = 0;
-        tempWindow.rows = 0;
-        tempWindow.rows3 = 0;
-        tempWindow.cols = 0;
-        tempWindow.cols3 = 0;
-        tempWindow.depths = 1;
-        tempWindow.proj = -1;
-        tempWindow.zone = -1;
-        tempWindow.compressed = -1;
-        tempWindow.ew_res = 0.0;
-        tempWindow.ew_res3 = 1.0;
-        tempWindow.ns_res = 0.0;
-        tempWindow.ns_res3 = 1.0;
-        tempWindow.tb_res = 1.0;
-        tempWindow.top = 1.0;
-        tempWindow.bottom = 0.0;
-
-        tempWindow.west = rect.xMinimum();
-        tempWindow.south = rect.yMinimum();
-        tempWindow.east = rect.xMaximum();
-        tempWindow.north = rect.yMaximum();
-        tempWindow.rows = ( int ) mCanvas->mapRenderer()->outputSize().height();
-        tempWindow.cols = ( int ) mCanvas->mapRenderer()->outputSize().width();
-
-        char* err = G_adjust_Cell_head( &tempWindow, 1, 1 );
-        if ( err )
+        QMessageBox questionBox( QMessageBox::Question, tr( "Warning" ),
+                                 tr( "Input %1 outside current region!" ).arg( outsideRegion.join( "," ) ),
+                                 QMessageBox::Ok | QMessageBox::Cancel );
+        QPushButton *resetButton = NULL;
+        if ( QgsGrass::versionMajor() > 6 || ( QgsGrass::versionMajor() == 6 && QgsGrass::versionMinor() >= 1 ) )
         {
-          QMessageBox::warning( 0, tr( "Warning" ), tr( "Cannot set region" ) + QString( err ) );
+          resetButton = questionBox.addButton( tr( "Use Input Region" ), QMessageBox::DestructiveRole );
         }
-        resetRegion = true;
-      }
-      else
-      {
-        QStringList outsideRegion = mOptions->checkRegion();
-        if ( outsideRegion.size() > 0 )
-        {
-          QMessageBox questionBox( QMessageBox::Question, tr( "Warning" ),
-                                   tr( "Input %1 outside current region!" ).arg( outsideRegion.join( "," ) ),
-                                   QMessageBox::Ok | QMessageBox::Cancel );
-          QPushButton *resetButton = NULL;
-          if ( QgsGrass::versionMajor() > 6 || ( QgsGrass::versionMajor() == 6 && QgsGrass::versionMinor() >= 1 ) )
-          {
-            resetButton = questionBox.addButton( tr( "Use Input Region" ), QMessageBox::DestructiveRole );
-          }
-          questionBox.exec();
-          QAbstractButton *clicked = questionBox.clickedButton();
-          if ( clicked == questionBox.button( QMessageBox::Cancel ) )
-            return;
-          if ( clicked == resetButton )
-            resetRegion = true;
+        questionBox.exec();
+        QAbstractButton *clicked = questionBox.clickedButton();
+        if ( clicked == questionBox.button( QMessageBox::Cancel ) )
+          return;
+        if ( clicked == resetButton )
+          resetRegion = true;
 
-          if ( resetRegion )
+        if ( resetRegion )
+        {
+          if ( !mOptions->inputRegion( &tempWindow, crs, true ) )
           {
-            if ( !mOptions->inputRegion( &tempWindow, true ) )
-            {
-              QMessageBox::warning( 0, tr( "Warning" ), tr( "Cannot get input region" ) );
-              return;
-            }
+            QMessageBox::warning( 0, tr( "Warning" ), tr( "Cannot get input region" ) );
+            return;
           }
         }
       }
     }
 
-    // Check if output exists
-    QStringList outputExists = mOptions->checkOutput();
-    if ( outputExists.size() > 0 )
+    // In direct mode user is warned by select file dialog
+    if ( !mDirect )
     {
-      QMessageBox::StandardButton ret = QMessageBox::question( 0, "Warning",
-                                        tr( "Output %1 exists! Overwrite?" ).arg( outputExists.join( "," ) ),
-                                        QMessageBox::Ok | QMessageBox::Cancel );
-
-      if ( ret == QMessageBox::Cancel )
-        return;
-
-      // r.mapcalc does not use standard parser
-      if ( typeid( *mOptions ) != typeid( QgsGrassMapcalc ) )
+      // Check if output exists
+      QStringList outputExists = mOptions->checkOutput();
+      if ( outputExists.size() > 0 )
       {
-        arguments.append( "--o" );
-        //mProcess.addArgument( "--o" );
-        //command.append ( " --o" );
+        QMessageBox::StandardButton ret = QMessageBox::question( 0, "Warning",
+                                          tr( "Output %1 exists! Overwrite?" ).arg( outputExists.join( "," ) ),
+                                          QMessageBox::Ok | QMessageBox::Cancel );
+
+        if ( ret == QMessageBox::Cancel )
+          return;
+
+        // r.mapcalc does not use standard parser
+        if ( typeid( *mOptions ) != typeid( QgsGrassMapcalc ) )
+        {
+          arguments.append( "--o" );
+          //mProcess.addArgument( "--o" );
+          //command.append ( " --o" );
+        }
       }
     }
 
@@ -1539,13 +1641,17 @@ void QgsGrassModule::run()
       lp =  QgsApplication::pluginPath() + ":" + lp;
       environment.insert( "LD_LIBRARY_PATH", lp );
       QgsDebugMsg( "LD_LIBRARY_PATH=" + lp );
-      environment.insert( "QGIS_PREFIX", QgsApplication::prefixPath() );
+      environment.insert( "QGIS_PREFIX_PATH", QgsApplication::prefixPath() );
+      if ( crs.isValid() ) // it should always be valid
+      {
+        environment.insert( "QGIS_GRASS_CRS", crs.toProj4() );
+      }
       // Suppress debug output
       environment.insert( "QGIS_DEBUG", "-1" );
 
       // Print some important variables
       QStringList variables;
-      variables << "LD_LIBRARY_PATH" << "QGIS_PREFIX" << "GRASS_REGION";
+      variables << "LD_LIBRARY_PATH" << "QGIS_PREFIX_PATH" << "QGIS_GRASS_CRS" << "GRASS_REGION";
       foreach ( QString v, variables )
       {
         mOutputTextBrowser->append( v + "=" + environment.value( v ) + "<BR>" );
@@ -2518,7 +2624,11 @@ QgsGrassModuleInput::QgsGrassModuleInput( QgsGrassModule *module,
     mRegionButton->setCheckable( true );
     mRegionButton->setSizePolicy( QSizePolicy::Minimum,
                                   QSizePolicy:: Preferred );
-    l->addWidget( mRegionButton );
+
+    if ( !mDirect )
+    {
+      l->addWidget( mRegionButton );
+    }
   }
 
   // Of course, activated(int) is not enough, but there is no signal BEFORE the cobo is opened
@@ -2735,6 +2845,7 @@ void QgsGrassModuleInput::updateQgisLayers()
 
               QString label = tr( "%1 (band %2)" ).arg( rasterLayer->name() ).arg( i );
               mLayerComboBox->addItem( label );
+              mMapLayers.push_back( layer );
 
               if ( label == current )
                 mLayerComboBox->setCurrentIndex( mLayerComboBox->count() - 1 );
@@ -2780,6 +2891,7 @@ void QgsGrassModuleInput::updateQgisLayers()
           continue;
 
         mMaps.push_back( map + "@" + mapset );
+        mMapLayers.push_back( layer );
 
         QString label = layer->name() + " ( " + map + "@" + mapset + " )";
 

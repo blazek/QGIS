@@ -30,6 +30,7 @@ extern "C"
 #include <qgsproviderregistry.h>
 #include <qgsrectangle.h>
 #include <qgsrasterdataprovider.h>
+#include <qgsrasterprojector.h>
 
 #include <QLibrary>
 #include <QProcess>
@@ -60,10 +61,12 @@ class GRASS_LIB_EXPORT QgsGrassGisLib
         int fd; // fake file descriptor
         QString name; // name passed from grass module, uri
         QgsRasterDataProvider *provider;
-        //QgsRasterFileWriter *writer;
+        QgsRasterProjector *projector;
+        // Input points to provider or projector
+        QgsRasterInterface *input;
         int band;
         int row; // next row to be written
-        Raster(): provider( 0 ), band( 1 ), row( 0 ) {}
+        Raster(): provider( 0 ), projector( 0 ), input( 0 ), band( 1 ), row( 0 ) {}
 
     };
 
@@ -120,6 +123,7 @@ class GRASS_LIB_EXPORT QgsGrassGisLib
     /** Raster maps, key is fake file descriptor  */
     QMap<int, Raster> mRasters;
 
+    /** Region to be used for data processing and output */
     struct Cell_head mWindow;
 
     /** Current region extent */

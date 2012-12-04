@@ -122,7 +122,6 @@ int GRASS_LIB_EXPORT QgsGrassGisLib::G__gisinit( const char * version, const cha
   char **argv = new char*[1];
   argv[0] = qstrdup( programName );
 
-  QCoreApplication app( argc, argv ); // to init paths
 
   // unfortunately it seems impossible to get QGIS prefix
   // QCoreApplication::applicationDirPath() returns $GISBASE/lib on Linux
@@ -132,16 +131,21 @@ int GRASS_LIB_EXPORT QgsGrassGisLib::G__gisinit( const char * version, const cha
   QString prefixPath = dir.absolutePath();
 #endif
 
-  QString prefixPath = getenv( "QGIS_PREFIX" );
-  if ( prefixPath.isEmpty() )
-  {
-    fatal( "Cannot get QGIS_PREFIX" );
-  }
+  //QCoreApplication app( argc, argv ); // to init paths
+  QgsApplication app( argc, argv, false ); // to init paths
 
-  QgsApplication::setPrefixPath( prefixPath, true );
+  // QGIS_PREFIX_PATH should be loaded by QgsApplication
+  //QString prefixPath = getenv( "QGIS_PREFIX_PATH" );
+  //if ( prefixPath.isEmpty() )
+  //{
+  //  fatal( "Cannot get QGIS_PREFIX_PATH" );
+  //}
+  //QgsApplication::setPrefixPath( prefixPath, true );
 
   QgsDebugMsg( "Plugin path: " + QgsApplication::pluginPath() );
   QgsProviderRegistry::instance( QgsApplication::pluginPath() );
+
+  QgsDebugMsg( "qgisSettingsDirPath = " + app.qgisSettingsDirPath() );
 
   G_set_error_routine( &errorRoutine );
   G_set_gisrc_mode( G_GISRC_MODE_MEMORY );
@@ -149,6 +153,18 @@ int GRASS_LIB_EXPORT QgsGrassGisLib::G__gisinit( const char * version, const cha
 
   G_suppress_masking();
   G__init_null_patterns();
+
+  // Read projection if set
+  //mCrs.createFromOgcWmsCrs( "EPSG:900913" );
+  QString crsStr = getenv( "QGIS_GRASS_CRS" );
+  if ( !crsStr.isEmpty() )
+  {
+    if ( !mCrs.createFromProj4( crsStr ) )
+    {
+      fatal( "Cannot create CRS from QGIS_GRASS_CRS: " + crsStr );
+    }
+  }
+  mDistanceArea.setSourceCrs( mCrs.srsid() );
 
   // Read region fron environment variable
   // QGIS_GRASS_REGION=west,south,east,north,cols,rows
@@ -191,15 +207,13 @@ int GRASS_LIB_EXPORT QgsGrassGisLib::G__gisinit( const char * version, const cha
   G_set_window( &window );
 #endif
 
+  // GRASS true lib reads GRASS_REGION environment variable
   G_get_window( &mWindow );
 
   mExtent = QgsRectangle( mWindow.west, mWindow.south, mWindow.east, mWindow.north );
   mRows = mWindow.rows;
   mColumns = mWindow.cols;
 
-  // TODO: read CRS from evnironment variable
-  mCrs.createFromOgcWmsCrs( "EPSG:900913" );
-  mDistanceArea.setSourceCrs( mCrs.srsid() );
 
   return 0;
 }
@@ -312,6 +326,26 @@ QgsGrassGisLib::Raster QgsGrassGisLib::raster( QString name )
   {
     fatal( "Cannot load raster provider with data source: " + dataSource );
   }
+  raster.input = raster.provider;
+  QgsDebugMsg( QString( "mCrs valid = %1 = %2" ).arg( mCrs.isValid() ).arg( mCrs.toProj4() ) );
+  QgsDebugMsg( QString( "crs valid = %1 = %2" ).arg( raster.provider->crs().isValid() ).arg( raster.provider->crs().toProj4() ) );
+  if ( mCrs.isValid() )
+  {
+    // GDAL provider loads data without CRS as EPSG:4326!!! Verify, it should give
+    // invalid CRS instead.
+    if ( !raster.provider->crs().isValid() )
+    {
+      fatal( "Output CRS specified but input CRS is unknown" );
+    }
+    if ( mCrs != raster.provider->crs() )
+    {
+      raster.projector = new QgsRasterProjector();
+      raster.projector->setCRS( raster.provider->crs(), mCrs );
+      raster.projector->setInput( raster.provider );
+      raster.input = raster.projector;
+    }
+  }
+
   raster.fd = mRasters.size();
   mRasters.insert( raster.fd, raster );
   return raster;
@@ -334,6 +368,7 @@ int QgsGrassGisLib::G_close_cell( int fd )
 {
   Raster rast = mRasters.value( fd );
   delete rast.provider;
+  delete rast.projector;
   mRasters.remove( fd );
   return 1;
 }
@@ -523,7 +558,8 @@ int G_set_quant_rules( int fd, struct Quant *q )
 int QgsGrassGisLib::readRasterRow( int fd, void * buf, int row, RASTER_MAP_TYPE data_type, bool noDataAsZero )
 {
   Raster raster = mRasters.value( fd );
-  if ( !raster.provider ) return -1;
+  //if ( !raster.provider ) return -1;
+  if ( !raster.input ) return -1;
 
   // Create extent for current row
   QgsRectangle blockRect = mExtent;
@@ -535,26 +571,42 @@ int QgsGrassGisLib::readRasterRow( int fd, void * buf, int row, RASTER_MAP_TYPE 
   blockRect.setYMaximum( yMax );
   blockRect.setYMinimum( yMax - yRes );
 
-  QgsRasterBlock *block = raster.provider->block( raster.band, blockRect, mColumns, 1 );
+  QgsRasterBlock *block = raster.input->block( raster.band, blockRect, mColumns, 1 );
   if ( !block ) return -1;
 
   QgsRasterBlock::DataType requestedType = qgisRasterType( data_type );
 
   //QgsDebugMsg( QString("data_type = %1").arg(data_type) );
   //QgsDebugMsg( QString("requestedType = %1").arg(requestedType) );
+  //QgsDebugMsg( QString("requestedType size = %1").arg( QgsRasterBlock::typeSize( requestedType ) ) );
   //QgsDebugMsg( QString("block->dataType = %1").arg( block->dataType() ) );
 
   block->convert( requestedType );
 
-  memcpy( buf, block->bits( 0 ), block->dataTypeSize( requestedType ) * mColumns );
+  memcpy( buf, block->bits( 0 ), QgsRasterBlock::typeSize( requestedType ) * mColumns );
 
   for ( int i = 0; i < mColumns; i++ )
   {
+    QgsDebugMsg( QString( "row = %1 i = %2 val = %3 isNoData = %4" ).arg( row ).arg( i ).arg( block->value( i ) ).arg( block->isNoData( i ) ) );
+    //(( CELL * ) buf )[i] = i;
     if ( block->isNoData( 0, i ) )
     {
       if ( noDataAsZero )
       {
-        G_zero(( char * ) &(( CELL * ) buf )[i], G_raster_size( data_type ) );
+        switch ( data_type )
+        {
+          case CELL_TYPE:
+            G_zero(( char * ) &(( CELL * ) buf )[i], G_raster_size( data_type ) );
+            break;
+          case FCELL_TYPE:
+            G_zero(( char * ) &(( FCELL * ) buf )[i], G_raster_size( data_type ) );
+            break;
+          case DCELL_TYPE:
+            G_zero(( char * ) &(( DCELL * ) buf )[i], G_raster_size( data_type ) );
+            break;
+          default:
+            break;
+        }
       }
       else
       {
@@ -648,11 +700,10 @@ int QgsGrassGisLib::G_put_raster_row( int fd, const void *buf, RASTER_MAP_TYPE d
   //QgsDebugMsg( QString("inputType = %1").arg(inputType) );
   //QgsDebugMsg( QString("provider->dataType = %1").arg( rast.provider->dataType( rast.band ) ) );
 
-
   double noDataValue = rast.provider->noDataValue( rast.band );
   QgsRasterBlock block( inputType, mColumns, 1, noDataValue );
 
-  memcpy( block.bits( 0 ), buf, block.dataTypeSize( inputType )*mColumns );
+  memcpy( block.bits( 0 ), buf, QgsRasterBlock::typeSize( inputType )*mColumns );
   block.convert( rast.provider->dataType( rast.band ) );
 
   // Set no data after converting to output type
@@ -678,7 +729,6 @@ int QgsGrassGisLib::G_put_raster_row( int fd, const void *buf, RASTER_MAP_TYPE d
       block.setIsNoData( i );
     }
   }
-
 
   if ( !rast.provider->write( block.bits( 0 ), rast.band, mColumns, 1, 0, rast.row ) )
   {

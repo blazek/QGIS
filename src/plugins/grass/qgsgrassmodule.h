@@ -20,6 +20,7 @@
 
 #include "qgis.h"
 #include "qgsfield.h"
+#include "qgscoordinatereferencesystem.h"
 
 #include <QCheckBox>
 #include <QGroupBox>
@@ -188,6 +189,11 @@ class QgsGrassModule: public QDialog, private  Ui::QgsGrassModuleBase
 class QgsGrassModuleOptions
 {
   public:
+    enum RegionMode
+    {
+      RegionInput = 1,  // intersection of input maps extent and highest input resolution
+      RegionCurrent = 0 // current map canvas extent and resolution
+    };
     //! Constructor
     QgsGrassModuleOptions(
       QgsGrassTools *tools, QgsGrassModule *module,
@@ -236,8 +242,8 @@ class QgsGrassModuleOptions
     //! Get region covering all input maps
     // \param all true all input maps
     // \param all false only the mas which were switched on
-    virtual bool inputRegion( struct Cell_head *window, bool all )
-    { Q_UNUSED( window ); Q_UNUSED( all ); return false; }
+    virtual bool inputRegion( struct Cell_head *window, QgsCoordinateReferenceSystem & crs, bool all )
+    { Q_UNUSED( window ); Q_UNUSED( crs ); Q_UNUSED( all ); return false; }
 
     // ! Flag names
     virtual QStringList flagNames() { return QStringList() ; }
@@ -260,6 +266,9 @@ class QgsGrassModuleOptions
 
     //! QGIS directory
     QString mAppDir;
+
+    //! Region mode select box
+    QComboBox * mRegionModeComboBox;
 
     //! Direct mode
     bool mDirect;
@@ -303,7 +312,7 @@ class QgsGrassModuleStandardOptions: QWidget, public QgsGrassModuleOptions
     QStringList checkRegion();
     bool usesRegion();
     bool requestsRegion();
-    bool inputRegion( struct Cell_head *window, bool all );
+    bool inputRegion( struct Cell_head *window, QgsCoordinateReferenceSystem & crs, bool all );
     QStringList flagNames() { return mFlagNames; }
 
   public slots:
