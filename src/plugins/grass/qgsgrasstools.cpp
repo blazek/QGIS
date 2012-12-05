@@ -47,6 +47,8 @@
 QgsGrassTools::QgsGrassTools( QgisInterface *iface,
                               QWidget * parent, const char * name, Qt::WFlags f )
     : QDialog( parent, f ), QgsGrassToolsBase()
+    , mBrowser( 0 )
+    , mModulesListModel( 0 ), mModelProxy( 0 ), mDirectModulesListModel( 0 ), mDirectModelProxy( 0 )
 {
   Q_UNUSED( name );
   setupUi( this );
@@ -62,10 +64,23 @@ QgsGrassTools::QgsGrassTools( QgisInterface *iface,
   connect( qApp, SIGNAL( aboutToQuit() ),
            this, SLOT( closeTools() ) );
 
+  //statusBar()->hide();
+
+  // set the dialog title
+  QString title = tr( "GRASS Tools: %1/%2" ).arg( QgsGrass::getDefaultLocation() ).arg( QgsGrass::getDefaultMapset() );
+  setWindowTitle( title );
+
+  // Add map browser
+  mBrowser = new QgsGrassBrowser( mIface, this );
+
+  connect( mBrowser, SIGNAL( regionChanged() ),
+           this, SLOT( emitRegionChanged() ) );
+
   // Tree view code.
   mModulesTree->header()->hide();
   connect( mModulesTree, SIGNAL( itemClicked( QTreeWidgetItem *, int ) ),
            this, SLOT( moduleClicked( QTreeWidgetItem *, int ) ) );
+
   mDirectModulesTree->header()->hide();
   connect( mDirectModulesTree, SIGNAL( itemClicked( QTreeWidgetItem *, int ) ),
            this, SLOT( directModuleClicked( QTreeWidgetItem *, int ) ) );
@@ -77,14 +92,6 @@ QgsGrassTools::QgsGrassTools( QgisInterface *iface,
   mModelProxy->setFilterRole( Qt::UserRole + 2 );
 
   mListView->setModel( mModelProxy );
-  //mListView->setItemDelegateForColumn( 0, new QgsDetailedItemDelegate() );
-  //mListView->setUniformItemSizes( false );
-  //mListView2 = new QListView(this);
-  //mDockWidget = new QDockWidget(tr("Grass Tools"), 0);
-  //mDockWidget->setWidget(mListView2);
-  //mDockWidget->setObjectName("GrassTools");
-  //mDockWidget->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
-  //mIface->addDockWidget(Qt::LeftDockWidgetArea, mDockWidget);
   connect( mListView, SIGNAL( clicked( const QModelIndex ) ),
            this, SLOT( listItemClicked( const QModelIndex ) ) );
 
@@ -97,34 +104,72 @@ QgsGrassTools::QgsGrassTools( QgisInterface *iface,
   connect( mDirectListView, SIGNAL( clicked( const QModelIndex ) ),
            this, SLOT( directListItemClicked( const QModelIndex ) ) );
 
-  //
-  // Load the modules lists
-  //
   // Show before loadConfig() so that user can see loading
-  QString conf = QgsApplication::pkgDataPath() + "/grass/config/default.qgc";
   restorePosition();
+  showTabs();
+}
 
-  QApplication::setOverrideCursor( Qt::WaitCursor );
-  //loadConfig( conf, mModulesTree, mModulesListModel, false );
-  loadConfig( conf, mDirectModulesTree, mDirectModulesListModel, true );
+void QgsGrassTools::showTabs()
+{
+  QgsDebugMsg( "entered." );
 
-  QApplication::restoreOverrideCursor();
-  //statusBar()->hide();
-
-  // set the dialog title
-  QString title = tr( "GRASS Tools: %1/%2" ).arg( QgsGrass::getDefaultLocation() ).arg( QgsGrass::getDefaultMapset() );
+  QString title;
+  if ( QgsGrass::activeMode() )
+  {
+    title = tr( "GRASS Tools: %1/%2" ).arg( QgsGrass::getDefaultLocation() ).arg( QgsGrass::getDefaultMapset() );
+    mBrowser->setLocation( QgsGrass::getDefaultGisdbase(), QgsGrass::getDefaultLocation() );
+  }
+  else
+  {
+    title = tr( "GRASS Direct Tools" );
+  }
   setWindowTitle( title );
 
-  // Add map browser
-  mBrowser = new QgsGrassBrowser( mIface, this );
-  mTabWidget->addTab( mBrowser, tr( "Browser" ) );
+  mTabWidget->removeTab( mTabWidget->indexOf( mModulesTreeTab ) );
+  mTabWidget->removeTab( mTabWidget->indexOf( mDirectModulesTreeTab ) );
+  mTabWidget->removeTab( mTabWidget->indexOf( mModulesListTab ) );
+  mTabWidget->removeTab( mTabWidget->indexOf( mDirectModulesListTab ) );
+  mTabWidget->removeTab( mTabWidget->indexOf( mBrowser ) );
 
-  connect( mBrowser, SIGNAL( regionChanged() ),
-           this, SLOT( emitRegionChanged() ) );
-
-  if ( !QgsGrass::activeMode() )
+  QString conf = QgsApplication::pkgDataPath() + "/grass/config/default.qgc";
+  if ( QgsGrass::activeMode() )
   {
-    mBrowser->hide();
+    mTabWidget->insertTab( 0, mModulesTreeTab, tr( "Modules Tree" ) );
+    mTabWidget->insertTab( 1, mModulesListTab, tr( "Modules List" ) );
+    mTabWidget->insertTab( 2, mBrowser, tr( "Browser" ) );
+    repaint();
+    QgsDebugMsg( QString( "topLevelItemCount = %1" ).arg( mModulesTree->topLevelItemCount() ) );
+    if ( mModulesTree->topLevelItemCount() == 0 )
+    {
+      // Load the modules lists
+      QApplication::setOverrideCursor( Qt::WaitCursor );
+      loadConfig( conf, mModulesTree, mModulesListModel, false );
+      QApplication::restoreOverrideCursor();
+    }
+    QgsDebugMsg( QString( "topLevelItemCount = %1" ).arg( mModulesTree->topLevelItemCount() ) );
+  }
+  else
+  {
+    // Remove open indirect modules tabs
+    for ( int i = mTabWidget->count() - 1; i >= 0; i-- )
+    {
+      QgsGrassModule *module = qobject_cast<QgsGrassModule *>( mTabWidget->widget( i ) );
+      if ( module && !module->isDirect() )
+      {
+        mTabWidget->removeTab( i );
+        delete module;
+      }
+    }
+
+    mTabWidget->insertTab( 0, mDirectModulesTreeTab, tr( "Direct Modules Tree" ) );
+    mTabWidget->insertTab( 1, mDirectModulesListTab, tr( "Direct Modules List" ) );
+    repaint();
+    if ( mDirectModulesTree->topLevelItemCount() == 0 )
+    {
+      QApplication::setOverrideCursor( Qt::WaitCursor );
+      loadConfig( conf, mDirectModulesTree, mDirectModulesListModel, true );
+      QApplication::restoreOverrideCursor();
+    }
   }
 }
 
@@ -414,11 +459,8 @@ void QgsGrassTools::mapsetChanged()
 {
   QgsDebugMsg( "entered." );
 
-  QString title = tr( "GRASS Tools: %1/%2" ).arg( QgsGrass::getDefaultLocation() ).arg( QgsGrass::getDefaultMapset() );
-  setWindowTitle( title );
-
-  closeTools();
-  mBrowser->setLocation( QgsGrass::getDefaultGisdbase(), QgsGrass::getDefaultLocation() );
+  //closeTools();
+  showTabs();
 }
 
 QgsGrassTools::~QgsGrassTools()

@@ -108,8 +108,6 @@ class QgsGrassTools: public QDialog, private Ui::QgsGrassToolsBase
     // For model & filtered model by Tim
     QStandardItemModel * mModulesListModel;
     QSortFilterProxyModel * mModelProxy;
-    //QListView * mListView2;
-    //QDockWidget * mDockWidget;
 
     // Direct modules model list
     QStandardItemModel * mDirectModulesListModel;
@@ -117,6 +115,9 @@ class QgsGrassTools: public QDialog, private Ui::QgsGrassToolsBase
 
     void removeEmptyItems( QTreeWidget *tree );
     void removeEmptyItems( QTreeWidgetItem *item );
+
+    // Show (fill) / hide tabs according to direct/indirect mode
+    void showTabs();
 };
 
 #endif // QGSGRASSTOOLS_H

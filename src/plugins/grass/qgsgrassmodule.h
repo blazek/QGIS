@@ -41,7 +41,6 @@ class QDomElement;
 class QLineEdit;
 class QValidator;
 
-
 /*! \class QgsGrassModule
  *  \brief Interface to GRASS modules.
  *
@@ -109,6 +108,9 @@ class QgsGrassModule: public QDialog, private  Ui::QgsGrassModuleBase
     // Returns empty list if not found.
     static QStringList execArguments( QString module );
 
+    //! Returns true if module is direct
+    bool isDirect() { return mDirect; }
+
   signals:
     // ! emitted when the module started
     void moduleStarted();
@@ -137,6 +139,9 @@ class QgsGrassModule: public QDialog, private  Ui::QgsGrassModuleBase
 
     //! Read module's standard error
     void readStderr();
+
+    //! Call on mapset change, i.e. also possible direct/indirect mode change
+    void mapsetChanged();
 
   private:
     //! Pointer to the QGIS interface object
@@ -387,7 +392,7 @@ class QgsGrassModuleItem
      * \param gnode option node in GRASS module XML description file
      */
     QgsGrassModuleItem( QgsGrassModule *module, QString key,
-                        QDomElement &qdesc, QDomElement &gdesc, QDomNode &gnode );
+                        QDomElement &qdesc, QDomElement &gdesc, QDomNode &gnode, bool direct );
 
     //! Destructor
     virtual ~QgsGrassModuleItem();
@@ -434,6 +439,8 @@ class QgsGrassModuleItem
     //! Is it required
     bool mRequired;
 
+    bool mDirect;
+
   private:
 
 };
@@ -455,7 +462,7 @@ class QgsGrassModuleGroupBoxItem: public QGroupBox, public QgsGrassModuleItem
      */
     QgsGrassModuleGroupBoxItem( QgsGrassModule *module, QString key,
                                 QDomElement &qdesc, QDomElement &gdesc, QDomNode &gnode,
-                                QWidget * parent = 0 );
+                                bool direct, QWidget * parent = 0 );
 
     //! Destructor
     virtual ~QgsGrassModuleGroupBoxItem();
@@ -484,7 +491,7 @@ class QgsGrassModuleOption: public QgsGrassModuleGroupBoxItem
      */
     QgsGrassModuleOption( QgsGrassModule *module, QString key,
                           QDomElement &qdesc, QDomElement &gdesc, QDomNode &gnode,
-                          QWidget * parent = 0 );
+                          bool direct, QWidget * parent = 0 );
 
     //! Destructor
     ~QgsGrassModuleOption();
@@ -530,6 +537,9 @@ class QgsGrassModuleOption: public QgsGrassModuleGroupBoxItem
 
     // Remove one line edit for multiple options
     void removeLineEdit();
+
+    // Browse output
+    void browse( bool checked );
 
   private:
     //! Control type
@@ -587,7 +597,7 @@ class QgsGrassModuleFlag: public QgsGrassModuleCheckBox, public QgsGrassModuleIt
      */
     QgsGrassModuleFlag( QgsGrassModule *module, QString key,
                         QDomElement &qdesc, QDomElement &gdesc, QDomNode &gnode,
-                        QWidget * parent = 0 );
+                        bool direct, QWidget * parent = 0 );
 
     //! Destructor
     ~QgsGrassModuleFlag();
@@ -705,9 +715,6 @@ class QgsGrassModuleInput: public QgsGrassModuleGroupBoxItem
 
     //! Required field
     bool mRequired;
-
-    //! Direct mode
-    bool mDirect;
 };
 
 /*********************** QgsGrassModuleGdalInput **********************/
@@ -726,7 +733,7 @@ class QgsGrassModuleGdalInput: public QgsGrassModuleGroupBoxItem
      */
     QgsGrassModuleGdalInput( QgsGrassModule *module, int type, QString key,
                              QDomElement &qdesc, QDomElement &gdesc, QDomNode &gnode,
-                             QWidget * parent = 0 );
+                             bool direct, QWidget * parent = 0 );
 
     //! Destructor
     ~QgsGrassModuleGdalInput();
@@ -790,7 +797,7 @@ class QgsGrassModuleField: public QgsGrassModuleGroupBoxItem
                          QgsGrassModuleStandardOptions *options,
                          QString key,
                          QDomElement &qdesc, QDomElement &gdesc, QDomNode &gnode,
-                         QWidget * parent = 0 );
+                         bool direct, QWidget * parent = 0 );
 
     //! Destructor
     ~QgsGrassModuleField();
@@ -838,7 +845,7 @@ class QgsGrassModuleSelection: public QgsGrassModuleGroupBoxItem
                              QString key,
                              QDomElement &qdesc, QDomElement &gdesc,
                              QDomNode &gnode,
-                             QWidget * parent = 0 );
+                             bool direct, QWidget * parent = 0 );
 
     //! Destructor
     ~QgsGrassModuleSelection();
@@ -888,7 +895,7 @@ class QgsGrassModuleFile: public QgsGrassModuleGroupBoxItem
                         QString key,
                         QDomElement &qdesc, QDomElement &gdesc,
                         QDomNode &gnode,
-                        QWidget * parent = 0 );
+                        bool direct, QWidget * parent = 0 );
 
     //! Destructor
     ~QgsGrassModuleFile();

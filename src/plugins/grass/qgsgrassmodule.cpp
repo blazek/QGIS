@@ -558,7 +558,7 @@ QgsGrassModuleStandardOptions::QgsGrassModuleStandardOptions(
         if ( !created )
         {
           QgsGrassModuleOption *so = new QgsGrassModuleOption(
-            mModule, key, e, gDocElem, gnode, mParent );
+            mModule, key, e, gDocElem, gnode, mDirect, mParent );
 
           layout->addWidget( so );
           created = true;
@@ -569,7 +569,7 @@ QgsGrassModuleStandardOptions::QgsGrassModuleStandardOptions(
       {
         QgsGrassModuleGdalInput *mi = new QgsGrassModuleGdalInput(
           mModule, QgsGrassModuleGdalInput::Ogr, key, e,
-          gDocElem, gnode, mParent );
+          gDocElem, gnode, mDirect, mParent );
         layout->addWidget( mi );
         mItems.push_back( mi );
       }
@@ -577,7 +577,7 @@ QgsGrassModuleStandardOptions::QgsGrassModuleStandardOptions(
       {
         QgsGrassModuleGdalInput *mi = new QgsGrassModuleGdalInput(
           mModule, QgsGrassModuleGdalInput::Gdal, key, e,
-          gDocElem, gnode, mParent );
+          gDocElem, gnode, mDirect, mParent );
         layout->addWidget( mi );
         mItems.push_back( mi );
       }
@@ -585,7 +585,7 @@ QgsGrassModuleStandardOptions::QgsGrassModuleStandardOptions(
       {
         QgsGrassModuleField *mi = new QgsGrassModuleField(
           mModule, this, key, e,
-          gDocElem, gnode, mParent );
+          gDocElem, gnode, mDirect, mParent );
         layout->addWidget( mi );
         mItems.push_back( mi );
       }
@@ -593,21 +593,21 @@ QgsGrassModuleStandardOptions::QgsGrassModuleStandardOptions(
       {
         QgsGrassModuleSelection *mi = new QgsGrassModuleSelection(
           mModule, this, key, e,
-          gDocElem, gnode, mParent );
+          gDocElem, gnode, mDirect, mParent );
         layout->addWidget( mi );
         mItems.push_back( mi );
       }
       else if ( optionType == "file" )
       {
         QgsGrassModuleFile *mi = new QgsGrassModuleFile(
-          mModule, key, e, gDocElem, gnode, mParent );
+          mModule, key, e, gDocElem, gnode, mDirect, mParent );
         layout->addWidget( mi );
         mItems.push_back( mi );
       }
       else if ( optionType == "flag" )
       {
         QgsGrassModuleFlag *flag = new QgsGrassModuleFlag(
-          mModule, key, e, gDocElem, gnode, mParent );
+          mModule, key, e, gDocElem, gnode, mDirect, mParent );
 
         layout->addWidget( flag );
         mItems.push_back( flag );
@@ -1887,39 +1887,46 @@ void QgsGrassModule::viewOutput()
   {
     QString map = mOutputVector.at( i );
 
-    QStringList layers = QgsGrass::vectorLayers(
-                           QgsGrass::getDefaultGisdbase(),
-                           QgsGrass::getDefaultLocation(),
-                           QgsGrass::getDefaultMapset(), map );
-
-    // check whether there are 1_* layers
-    // if so, 0_* layers won't be added
-    bool onlyLayer1 = false;
-    for ( int j = 0; j < layers.count(); j++ )
+    if ( mDirect )
     {
-      if ( layers[j].left( 1 ) == "1" )
-      {
-        onlyLayer1 = true;
-        break;
-      }
+      // TODO, maybe
     }
-
-    // TODO common method for add all layers
-    for ( int j = 0; j < layers.count(); j++ )
+    else
     {
-      QString uri = QgsGrass::getDefaultGisdbase() + "/"
-                    + QgsGrass::getDefaultLocation() + "/"
-                    + QgsGrass::getDefaultMapset() + "/"
-                    + map + "/" + layers[j];
+      QStringList layers = QgsGrass::vectorLayers(
+                             QgsGrass::getDefaultGisdbase(),
+                             QgsGrass::getDefaultLocation(),
+                             QgsGrass::getDefaultMapset(), map );
 
-      // skip 0_* layers
-      if ( onlyLayer1 && layers[j].left( 1 ) != "1" )
-        continue;
+      // check whether there are 1_* layers
+      // if so, 0_* layers won't be added
+      bool onlyLayer1 = false;
+      for ( int j = 0; j < layers.count(); j++ )
+      {
+        if ( layers[j].left( 1 ) == "1" )
+        {
+          onlyLayer1 = true;
+          break;
+        }
+      }
 
-      QString name = QgsGrassUtils::vectorLayerName(
-                       map, layers[j], 1 );
+      // TODO common method for add all layers
+      for ( int j = 0; j < layers.count(); j++ )
+      {
+        QString uri = QgsGrass::getDefaultGisdbase() + "/"
+                      + QgsGrass::getDefaultLocation() + "/"
+                      + QgsGrass::getDefaultMapset() + "/"
+                      + map + "/" + layers[j];
 
-      mIface->addVectorLayer( uri, name, "grass" );
+        // skip 0_* layers
+        if ( onlyLayer1 && layers[j].left( 1 ) != "1" )
+          continue;
+
+        QString name = QgsGrassUtils::vectorLayerName(
+                         map, layers[j], 1 );
+
+        mIface->addVectorLayer( uri, name, "grass" );
+      }
     }
   }
 
@@ -1927,13 +1934,20 @@ void QgsGrassModule::viewOutput()
   {
     QString map = mOutputRaster.at( i );
 
-    QString uri = QgsGrass::getDefaultGisdbase() + "/"
-                  + QgsGrass::getDefaultLocation() + "/"
-                  + QgsGrass::getDefaultMapset()
-                  + "/cellhd/" + map;
+    if ( mDirect )
+    {
+      QString baseName = QFileInfo( map ).baseName();
+      mIface->addRasterLayer( map, baseName, "gdal" );
+    }
+    else
+    {
+      QString uri = QgsGrass::getDefaultGisdbase() + "/"
+                    + QgsGrass::getDefaultLocation() + "/"
+                    + QgsGrass::getDefaultMapset()
+                    + "/cellhd/" + map;
 
-    //mIface->addRasterLayer( uri, map );
-    mIface->addRasterLayer( uri, map, "grassraster" );
+      mIface->addRasterLayer( uri, map, "grassraster" );
+    }
   }
 }
 
@@ -1985,8 +1999,8 @@ QDomNode QgsGrassModule::nodeByKey( QDomElement elem, QString key )
 
 QgsGrassModuleOption::QgsGrassModuleOption( QgsGrassModule *module, QString key,
     QDomElement &qdesc, QDomElement &gdesc, QDomNode &gnode,
-    QWidget * parent )
-    :  QgsGrassModuleGroupBoxItem( module, key, qdesc, gdesc, gnode, parent ),
+    bool direct, QWidget * parent )
+    :  QgsGrassModuleGroupBoxItem( module, key, qdesc, gdesc, gnode, direct, parent ),
     mControlType( NoControl ), mValueType( String ), mOutputType( None ), mHaveLimits( false ), mIsOutput( false )
 {
   QgsDebugMsg( "called." );
@@ -2257,7 +2271,39 @@ void QgsGrassModuleOption::addLineEdit()
     lineEdit->setValidator( mValidator );
   }
 
-  mLayout->addWidget( lineEdit );
+  if ( mIsOutput && mDirect )
+  {
+    QHBoxLayout *l = new QHBoxLayout();
+    l->addWidget( lineEdit );
+    lineEdit->setSizePolicy( QSizePolicy::Expanding, QSizePolicy:: Preferred );
+    QPushButton *button = new QPushButton( tr( "Browse" ) );
+    l->addWidget( button );
+    mLayout->addItem( l );
+    connect( button, SIGNAL( clicked( bool ) ), this, SLOT( browse( bool ) ) );
+  }
+  else
+  {
+    mLayout->addWidget( lineEdit );
+  }
+}
+
+void QgsGrassModuleOption::browse( bool checked )
+{
+  Q_UNUSED( checked );
+  QgsDebugMsg( "called." );
+
+  QSettings settings;
+  QString lastDir = settings.value( "/GRASS/lastDirectOutputDir", "" ).toString();
+  QString fileName = QFileDialog::getSaveFileName( this, tr( "Output file" ), lastDir, tr( "GeoTIFF" ) + " (*.tif)" );
+  if ( !fileName.isEmpty() )
+  {
+    if ( !fileName.endsWith( ".tif", Qt::CaseInsensitive ) && !fileName.endsWith( ".tiff", Qt::CaseInsensitive ) )
+    {
+      fileName = fileName + ".tif";
+    }
+    mLineEdits.at( 0 )->setText( fileName );
+    settings.setValue( "/GRASS/lastDirectOutputDir",  QFileInfo( fileName ).absolutePath() );
+  }
 }
 
 void QgsGrassModuleOption::removeLineEdit()
@@ -2423,8 +2469,8 @@ QgsGrassModuleOption::~QgsGrassModuleOption()
 
 QgsGrassModuleFlag::QgsGrassModuleFlag( QgsGrassModule *module, QString key,
                                         QDomElement &qdesc, QDomElement &gdesc, QDomNode &gnode,
-                                        QWidget * parent )
-    : QgsGrassModuleCheckBox( "", parent ), QgsGrassModuleItem( module, key, qdesc, gdesc, gnode )
+                                        bool direct, QWidget * parent )
+    : QgsGrassModuleCheckBox( "", parent ), QgsGrassModuleItem( module, key, qdesc, gdesc, gnode, direct )
 {
   QgsDebugMsg( "called." );
 
@@ -2460,14 +2506,13 @@ QgsGrassModuleInput::QgsGrassModuleInput( QgsGrassModule *module,
     QgsGrassModuleStandardOptions *options, QString key,
     QDomElement &qdesc, QDomElement &gdesc, QDomNode &gnode,
     bool direct, QWidget * parent )
-    : QgsGrassModuleGroupBoxItem( module, key, qdesc, gdesc, gnode, parent )
+    : QgsGrassModuleGroupBoxItem( module, key, qdesc, gdesc, gnode, direct, parent )
     , mModuleStandardOptions( options )
     , mGeometryTypeOption( "" )
     , mVectorLayerOption( "" )
     , mRegionButton( 0 )
     , mUpdate( false )
     , mRequired( false )
-    , mDirect( direct )
 {
   QgsDebugMsg( "called." );
   mGeometryTypeMask = GV_POINT | GV_LINE | GV_AREA;
@@ -3028,11 +3073,12 @@ QgsGrassModuleInput::~QgsGrassModuleInput()
 /********************** QgsGrassModuleItem *************************/
 
 QgsGrassModuleItem::QgsGrassModuleItem( QgsGrassModule *module, QString key,
-                                        QDomElement &qdesc, QDomElement &gdesc, QDomNode &gnode )
+                                        QDomElement &qdesc, QDomElement &gdesc, QDomNode &gnode, bool direct )
     : mModule( module )
     , mKey( key )
     , mHidden( false )
     , mRequired( false )
+    , mDirect( direct )
 {
   Q_UNUSED( gdesc );
   //mAnswer = qdesc.attribute("answer", "");
@@ -3111,9 +3157,9 @@ QgsGrassModuleItem::~QgsGrassModuleItem() {}
 
 QgsGrassModuleGroupBoxItem::QgsGrassModuleGroupBoxItem( QgsGrassModule *module, QString key,
     QDomElement &qdesc, QDomElement &gdesc, QDomNode &gnode,
-    QWidget * parent )
+    bool direct, QWidget * parent )
     : QGroupBox( parent ),
-    QgsGrassModuleItem( module, key, qdesc, gdesc, gnode )
+    QgsGrassModuleItem( module, key, qdesc, gdesc, gnode, direct )
 {
   adjustTitle();
 
@@ -3140,8 +3186,8 @@ void QgsGrassModuleGroupBoxItem::adjustTitle()
 
 QgsGrassModuleGdalInput::QgsGrassModuleGdalInput(
   QgsGrassModule *module, int type, QString key, QDomElement &qdesc,
-  QDomElement &gdesc, QDomNode &gnode, QWidget * parent )
-    : QgsGrassModuleGroupBoxItem( module, key, qdesc, gdesc, gnode, parent )
+  QDomElement &gdesc, QDomNode &gnode, bool direct, QWidget * parent )
+    : QgsGrassModuleGroupBoxItem( module, key, qdesc, gdesc, gnode, direct, parent )
     , mType( type )
     , mOgrLayerOption( "" )
     , mOgrWhereOption( "" )
@@ -3431,8 +3477,8 @@ QgsGrassModuleGdalInput::~QgsGrassModuleGdalInput()
 QgsGrassModuleField::QgsGrassModuleField(
   QgsGrassModule *module, QgsGrassModuleStandardOptions *options,
   QString key, QDomElement &qdesc,
-  QDomElement &gdesc, QDomNode &gnode, QWidget * parent )
-    :  QgsGrassModuleGroupBoxItem( module, key, qdesc, gdesc, gnode, parent ),
+  QDomElement &gdesc, QDomNode &gnode, bool direct, QWidget * parent )
+    :  QgsGrassModuleGroupBoxItem( module, key, qdesc, gdesc, gnode, direct, parent ),
     mModuleStandardOptions( options ), mLayerInput( 0 )
 {
   if ( mTitle.isEmpty() )
@@ -3520,8 +3566,8 @@ QgsGrassModuleField::~QgsGrassModuleField()
 QgsGrassModuleSelection::QgsGrassModuleSelection(
   QgsGrassModule *module, QgsGrassModuleStandardOptions *options,
   QString key, QDomElement &qdesc,
-  QDomElement &gdesc, QDomNode &gnode, QWidget * parent )
-    :  QgsGrassModuleGroupBoxItem( module, key, qdesc, gdesc, gnode, parent ),
+  QDomElement &gdesc, QDomNode &gnode, bool direct, QWidget * parent )
+    :  QgsGrassModuleGroupBoxItem( module, key, qdesc, gdesc, gnode, direct, parent ),
     mModuleStandardOptions( options ), mLayerInput( 0 ),
     mVectorLayer( 0 )
 {
@@ -3632,8 +3678,8 @@ QgsGrassModuleSelection::~QgsGrassModuleSelection()
 QgsGrassModuleFile::QgsGrassModuleFile(
   QgsGrassModule *module,
   QString key, QDomElement &qdesc,
-  QDomElement &gdesc, QDomNode &gnode, QWidget * parent )
-    :  QgsGrassModuleGroupBoxItem( module, key, qdesc, gdesc, gnode, parent ),
+  QDomElement &gdesc, QDomNode &gnode, bool direct, QWidget * parent )
+    :  QgsGrassModuleGroupBoxItem( module, key, qdesc, gdesc, gnode, direct, parent ),
     mType( Old )
 {
   if ( mTitle.isEmpty() )

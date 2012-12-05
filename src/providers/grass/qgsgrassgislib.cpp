@@ -398,7 +398,6 @@ int QgsGrassGisLib::G_open_raster_new( const char *name, RASTER_MAP_TYPE wr_type
   int nBands = 1;
   QgsRasterBlock::DataType type = qgisRasterType( wr_type );
   QgsDebugMsg( QString( "type = %1" ).arg( type ) );
-  QgsCoordinateReferenceSystem crs;
   double geoTransform[6];
   geoTransform[0] = mExtent.xMinimum();
   geoTransform[1] = mExtent.width() / mColumns;
@@ -407,7 +406,7 @@ int QgsGrassGisLib::G_open_raster_new( const char *name, RASTER_MAP_TYPE wr_type
   geoTransform[4] = 0.0;
   geoTransform[5] = -1. * mExtent.height() / mRows;
 
-  if ( !raster.provider->create( outputFormat, nBands, type, mColumns, mRows, geoTransform, crs ) )
+  if ( !raster.provider->create( outputFormat, nBands, type, mColumns, mRows, geoTransform, mCrs ) )
   {
     delete raster.provider;
     fatal( "Cannot create output data source: " + dataSource );
@@ -557,6 +556,7 @@ int G_set_quant_rules( int fd, struct Quant *q )
 
 int QgsGrassGisLib::readRasterRow( int fd, void * buf, int row, RASTER_MAP_TYPE data_type, bool noDataAsZero )
 {
+  // TODO: use cached block with more rows
   Raster raster = mRasters.value( fd );
   //if ( !raster.provider ) return -1;
   if ( !raster.input ) return -1;
