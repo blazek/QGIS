@@ -83,7 +83,7 @@ QgsGrassGisLib::QgsGrassGisLib()
   }
 }
 
-int QgsGrassGisLib::errorRoutine( const char *msg, int fatal )
+int GRASS_LIB_EXPORT QgsGrassGisLib::errorRoutine( const char *msg, int fatal )
 {
   QgsDebugMsg( QString( "error_routine (fatal = %1): %2" ).arg( fatal ).arg( msg ) );
   // Crash to get backtrace

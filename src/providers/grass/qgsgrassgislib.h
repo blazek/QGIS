@@ -107,7 +107,7 @@ class GRASS_LIB_EXPORT QgsGrassGisLib
     void * resolve( const char * symbol );
 
     // Print error function set to be called by GRASS lib
-    static int errorRoutine( const char *msg, int fatal );
+    static GRASS_LIB_EXPORT int errorRoutine( const char *msg, int fatal );
 
     // Error called by fake lib
     void fatal( QString msg );

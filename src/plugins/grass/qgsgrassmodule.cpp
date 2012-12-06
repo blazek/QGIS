@@ -342,11 +342,17 @@ QgsGrassModuleStandardOptions::QgsGrassModuleStandardOptions(
   {
     // Set path to GRASS gis fake library
     QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
-    // TODO: Windows
+#ifdef Q_OS_WIN
+    QString lp = environment.value( "PATH" );
+    lp =  QgsApplication::pluginPath() + ";" + lp;
+    environment.insert( "PATH", lp );
+    QgsDebugMsg( "PATH=" + lp );
+#else
     QString lp = environment.value( "LD_LIBRARY_PATH" );
     lp =  QgsApplication::pluginPath() + ":" + lp;
     environment.insert( "LD_LIBRARY_PATH", lp );
     QgsDebugMsg( "LD_LIBRARY_PATH=" + lp );
+#endif
     environment.insert( "QGIS_PREFIX", QgsApplication::prefixPath() );
     // Window to avoid crash in G__gisinit
     environment.insert( "GRASS_REGION", "west:0;south:0;east:1;north:1;cols:1;rows:1;proj:0;zone:0" );
@@ -1637,11 +1643,20 @@ void QgsGrassModule::run()
 
     if ( mDirect )
     {
-      // TODO: Windows
+      QStringList variables;
+#ifdef Q_OS_WIN
+      QString lp = environment.value( "PATH" );
+      lp =  QgsApplication::pluginPath() + ";" + lp;
+      environment.insert( "PATH", lp );
+      QgsDebugMsg( "PATH=" + lp );
+      variables << "PATH";
+#else
       QString lp = environment.value( "LD_LIBRARY_PATH" );
       lp =  QgsApplication::pluginPath() + ":" + lp;
       environment.insert( "LD_LIBRARY_PATH", lp );
       QgsDebugMsg( "LD_LIBRARY_PATH=" + lp );
+      variables << "LD_LIBRARY_PATH";
+#endif
       environment.insert( "QGIS_PREFIX_PATH", QgsApplication::prefixPath() );
       if ( crs.isValid() ) // it should always be valid
       {
@@ -1651,8 +1666,7 @@ void QgsGrassModule::run()
       environment.insert( "QGIS_DEBUG", "-1" );
 
       // Print some important variables
-      QStringList variables;
-      variables << "LD_LIBRARY_PATH" << "QGIS_PREFIX_PATH" << "QGIS_GRASS_CRS" << "GRASS_REGION";
+      variables << "QGIS_PREFIX_PATH" << "QGIS_GRASS_CRS" << "GRASS_REGION";
       foreach ( QString v, variables )
       {
         mOutputTextBrowser->append( v + "=" + environment.value( v ) + "<BR>" );
