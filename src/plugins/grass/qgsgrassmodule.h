@@ -704,6 +704,9 @@ class QgsGrassModuleInput: public QgsGrassModuleGroupBoxItem
     //! Pointers to vector layers in combobox
     std::vector<QgsMapLayer*> mMapLayers;
 
+    //! Vector of band numbers in combobox for rasters in direct mode
+    QList<int> mBands;
+
     //! Attribute fields of layers in the combobox
     std::vector< std::vector<QgsField> > mVectorFields;
 

@@ -33,6 +33,7 @@
 #include "qgslogger.h"
 #include "qgsmapcanvas.h"
 #include "qgsmaplayer.h"
+#include "qgsmaplayerregistry.h"
 #include "qgsrasterlayer.h"
 #include "qgsvectorlayer.h"
 
@@ -2676,12 +2677,11 @@ QgsGrassModuleInput::QgsGrassModuleInput( QgsGrassModule *module,
     }
   }
 
-  // Of course, activated(int) is not enough, but there is no signal BEFORE the cobo is opened
-  //connect ( mLayerComboBox, SIGNAL( activated(int) ), this, SLOT(updateQgisLayers()) );
-
-  // Connect to canvas
-  QgsMapCanvas *canvas = mModule->qgisIface()->mapCanvas();
-  connect( canvas, SIGNAL( layersChanged() ), this, SLOT( updateQgisLayers() ) );
+  connect( QgsMapLayerRegistry::instance(), SIGNAL( layersAdded( QList<QgsMapLayer *> ) ),
+           this, SLOT( updateQgisLayers() ) );
+  // layersWillBeRemoved is emited AFTER the layer was removed from registry
+  connect( QgsMapLayerRegistry::instance(), SIGNAL( layersWillBeRemoved( QStringList ) ),
+           this, SLOT( updateQgisLayers() ) );
 
   connect( mLayerComboBox, SIGNAL( activated( int ) ), this, SLOT( changed( int ) ) );
 
@@ -2729,6 +2729,7 @@ void QgsGrassModuleInput::updateQgisLayers()
   mGeometryTypes.clear();
   mVectorLayerNames.clear();
   mMapLayers.clear();
+  mBands.clear();
   mVectorFields.clear();
 
   // If not required, add an empty item to combobox and a padding item into
@@ -2738,10 +2739,9 @@ void QgsGrassModuleInput::updateQgisLayers()
     mMaps.push_back( QString( "" ) );
     mVectorLayerNames.push_back( QString( "" ) );
     mMapLayers.push_back( NULL );
+    mBands.append( 0 );
     mLayerComboBox->addItem( tr( "Select a layer" ), QVariant() );
   }
-
-  QgsMapCanvas *canvas = mModule->qgisIface()->mapCanvas();
 
   // Find map option
   QString sourceMap;
@@ -2759,10 +2759,12 @@ void QgsGrassModuleInput::updateQgisLayers()
   //QChar sep = QDir::separator();
   QChar sep = '/';
 
-  int nlayers = canvas->layerCount();
-  for ( int i = 0; i < nlayers; i++ )
+  //QgsMapCanvas *canvas = mModule->qgisIface()->mapCanvas();
+  //int nlayers = canvas->layerCount();
+  foreach ( QString layerId, QgsMapLayerRegistry::instance()->mapLayers().keys() )
   {
-    QgsMapLayer *layer = canvas->layer( i );
+    //QgsMapLayer *layer = canvas->layer( i );
+    QgsMapLayer *layer =  QgsMapLayerRegistry::instance()->mapLayers().value( layerId );
 
     QgsDebugMsg( "layer->type() = " + QString::number( layer->type() ) );
 
@@ -2881,6 +2883,12 @@ void QgsGrassModuleInput::updateQgisLayers()
         QgsRasterLayer* rasterLayer = qobject_cast<QgsRasterLayer *>( layer );
         if ( rasterLayer && rasterLayer->dataProvider() )
         {
+          QString providerKey = rasterLayer->dataProvider()->name();
+          // TODO: GRASS itself is not supported for now because module is run
+          // with fake GRASS gis lib and the provider needs true gis lib
+          if ( providerKey == "grassraster" ) continue;
+          // Cannot use WCS until the problem with missing QThread is solved
+          if ( providerKey == "wcs" ) continue;
           for ( int i = 1; i <= rasterLayer->dataProvider()->bandCount(); i++ )
           {
             if ( QgsRasterBlock::typeIsNumeric( rasterLayer->dataProvider()->dataType( i ) ) )
@@ -2891,6 +2899,7 @@ void QgsGrassModuleInput::updateQgisLayers()
               QString label = tr( "%1 (band %2)" ).arg( rasterLayer->name() ).arg( i );
               mLayerComboBox->addItem( label );
               mMapLayers.push_back( layer );
+              mBands.append( i );
 
               if ( label == current )
                 mLayerComboBox->setCurrentIndex( mLayerComboBox->count() - 1 );
@@ -2957,28 +2966,86 @@ QStringList QgsGrassModuleInput::options()
   if ( current < 0 ) // not found
     return list;
 
-  // TODO: this is hack for network nodes, do it somehow better
-  if ( mMapId.isEmpty() )
+  if ( mDirect )
   {
-    if ( current <  mMaps.size() )
+    QgsMapLayer *layer = mMapLayers[current];
+
+    if ( layer->type() == QgsMapLayer::RasterLayer )
     {
-      if ( ! mMaps[current].isEmpty() )
+      QgsRasterLayer* rasterLayer = qobject_cast<QgsRasterLayer *>( layer );
+      if ( !rasterLayer || !rasterLayer->dataProvider() )
       {
-        list.push_back( mKey + "=" + mMaps[current] );
+        QMessageBox::warning( 0, tr( "Warning" ), tr( "Cannot get provider" ) );
+        return list;
       }
+      QString grassUri;
+      QString providerUri = rasterLayer->dataProvider()->dataSourceUri();
+      QString providerKey = rasterLayer->dataProvider()->name();
+      int band = mBands.value( current );
+      if ( providerKey == "gdal" && band == 1 )
+      {
+        // GDAL provider and band 1 are defaults, thus we can use simply GDAL path
+        grassUri = providerUri;
+      }
+      else
+      {
+        // Need to encode more info into uri
+        QgsDataSourceURI uri;
+        if ( providerKey == "gdal" )
+        {
+          // providerUri is simple file path
+          // encoded uri is not currently supported by GDAL provider, it is only used here and decoded in fake gis lib
+          uri.setParam( "path", providerUri );
+        }
+        else // WCS
+        {
+          // providerUri is encoded QgsDataSourceURI
+          uri.setEncodedUri( providerUri );
+        }
+        uri.setParam( "provider", providerKey );
+        uri.setParam( "band", QString::number( band ) );
+        grassUri = uri.encodedUri();
+      }
+      opt = mKey + "=" + grassUri;
+      list.push_back( opt );
+    }
+    else if ( layer->type() == QgsMapLayer::VectorLayer )
+    {
+      QgsVectorLayer* vectorLayer = qobject_cast<QgsVectorLayer *>( layer );
+      if ( !vectorLayer || !vectorLayer->dataProvider() )
+      {
+        QMessageBox::warning( 0, tr( "Warning" ), tr( "Cannot get provider" ) );
+        return list;
+      }
+      opt = mKey + "=" + vectorLayer->dataProvider()->dataSourceUri();
+      list.push_back( opt );
     }
   }
-
-  if ( !mGeometryTypeOption.isEmpty() && current < mGeometryTypes.size() )
+  else
   {
-    opt = mGeometryTypeOption + "=" + mGeometryTypes[current] ;
-    list.push_back( opt );
-  }
+    // TODO: this is hack for network nodes, do it somehow better
+    if ( mMapId.isEmpty() )
+    {
+      if ( current <  mMaps.size() )
+      {
+        if ( ! mMaps[current].isEmpty() )
+        {
+          list.push_back( mKey + "=" + mMaps[current] );
+        }
+      }
+    }
 
-  if ( !mVectorLayerOption.isEmpty() && current < mVectorLayerNames.size() )
-  {
-    opt = mVectorLayerOption + "=" + mVectorLayerNames[current] ;
-    list.push_back( opt );
+    if ( !mGeometryTypeOption.isEmpty() && current < mGeometryTypes.size() )
+    {
+      opt = mGeometryTypeOption + "=" + mGeometryTypes[current] ;
+      list.push_back( opt );
+    }
+
+    if ( !mVectorLayerOption.isEmpty() && current < mVectorLayerNames.size() )
+    {
+      opt = mVectorLayerOption + "=" + mVectorLayerNames[current] ;
+      list.push_back( opt );
+    }
   }
 
   return list;
@@ -3252,19 +3319,11 @@ QgsGrassModuleGdalInput::QgsGrassModuleGdalInput(
 
   lbl->setBuddy( mLayerPassword );
 
-  connect( mLayerComboBox, SIGNAL( activated( int ) ), this, SLOT( changed( int ) ) );
-
-  // Of course, activated(int) is not enough, but there is no signal
-  // BEFORE the cobo is opened
-  // connect ( mLayerComboBox, SIGNAL( activated(int) ), this, SLOT(updateQgisLayers()) );
-
-  // Connect to canvas
-  QgsMapCanvas *canvas = mModule->qgisIface()->mapCanvas();
-
-  // It seems that addedLayer/removedLayer does not work
-  //connect ( canvas, SIGNAL(addedLayer(QgsMapLayer *)), this, SLOT(updateQgisLayers()) );
-  //connect ( canvas, SIGNAL(removedLayer(QString)), this, SLOT(updateQgisLayers()) );
-  connect( canvas, SIGNAL( layersChanged() ), this, SLOT( updateQgisLayers() ) );
+  connect( QgsMapLayerRegistry::instance(), SIGNAL( layersAdded( QList<QgsMapLayer *> ) ),
+           this, SLOT( updateQgisLayers() ) );
+  // layersWillBeRemoved is emited after the layer was removed from registry
+  connect( QgsMapLayerRegistry::instance(), SIGNAL( layersWillBeRemoved( QStringList ) ),
+           this, SLOT( updateQgisLayers() ) );
 
   // Fill in QGIS layers
   updateQgisLayers();

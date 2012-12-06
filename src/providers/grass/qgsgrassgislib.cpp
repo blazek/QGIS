@@ -22,9 +22,11 @@
 #include "qgslogger.h"
 #include "qgsapplication.h"
 #include "qgscoordinatereferencesystem.h"
+#include "qgsdatasourceuri.h"
 #include "qgsrectangle.h"
 #include "qgsconfig.h"
 
+#include <QByteArray>
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QProcess>
@@ -133,6 +135,10 @@ int GRASS_LIB_EXPORT QgsGrassGisLib::G__gisinit( const char * version, const cha
 
   //QCoreApplication app( argc, argv ); // to init paths
   QgsApplication app( argc, argv, false ); // to init paths
+
+  // TODO: WCS (network) fails with: "QTimer can only be used with threads started
+  // with QThread" because QCoreApplication::exec() was not called, but
+  // QCoreApplication::exec() goes to loop. We need to start QThread somehow.
 
   // QGIS_PREFIX_PATH should be loaded by QgsApplication
   //QString prefixPath = getenv( "QGIS_PREFIX_PATH" );
@@ -311,22 +317,60 @@ QgsGrassGisLib::Raster QgsGrassGisLib::raster( QString name )
 {
   QgsDebugMsg( "name = " + name );
 
-  QString providerKey = "gdal";
-  QString dataSource = name;
-
   foreach ( Raster raster, mRasters )
   {
     if ( raster.name == name ) return raster;
   }
 
+  QString providerKey;
+  QString dataSource;
+  int band = 1;
+
+  if ( name.contains( "provider=" ) ) // encoded uri
+  {
+    QgsDataSourceURI uri;
+    uri.setEncodedUri( name.toLocal8Bit() );
+    if ( uri.hasParam( "band" ) )
+    {
+      band = uri.param( "band" ).toInt();
+    }
+    providerKey = uri.param( "provider" );
+    if ( providerKey == "gdal" )
+    {
+      dataSource = uri.param( "path" );
+    }
+    else
+    {
+      uri.removeParam( "band" );
+      uri.removeParam( "provider" );
+      dataSource = uri.encodedUri();
+    }
+  }
+  else // simple GDAL path
+  {
+    providerKey = "gdal";
+    dataSource = name;
+    band = 1;
+  }
+  QgsDebugMsg( "providerKey = " + providerKey );
+  QgsDebugMsg( "dataSource = " + dataSource );
+  QgsDebugMsg( QString( "band = %1" ).arg( band ) );
+
   Raster raster;
   raster.name = name;
+  raster.band = band;
   raster.provider = ( QgsRasterDataProvider* )QgsProviderRegistry::instance()->provider( providerKey, dataSource );
   if ( !raster.provider )
   {
     fatal( "Cannot load raster provider with data source: " + dataSource );
   }
   raster.input = raster.provider;
+
+  if ( band < 1 || band > raster.provider->bandCount() )
+  {
+    fatal( "Band out of range" );
+  }
+
   QgsDebugMsg( QString( "mCrs valid = %1 = %2" ).arg( mCrs.isValid() ).arg( mCrs.toProj4() ) );
   QgsDebugMsg( QString( "crs valid = %1 = %2" ).arg( raster.provider->crs().isValid() ).arg( raster.provider->crs().toProj4() ) );
   if ( mCrs.isValid() )
