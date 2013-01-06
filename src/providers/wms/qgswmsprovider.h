@@ -642,10 +642,12 @@ class QgsWmsProvider : public QgsRasterDataProvider
       */
     int capabilities() const;
 
+    /** Server identify capabilities, used by source select. */
+    int identifyCapabilities() const;
+
     QGis::DataType dataType( int bandNo ) const;
     QGis::DataType srcDataType( int bandNo ) const;
     int bandCount() const;
-
 
     /**
      * Get metadata in a format suitable for feeding directly

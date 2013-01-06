@@ -96,6 +96,8 @@ QgsWmsProvider::QgsWmsProvider( QString const &uri )
 {
   QgsDebugMsg( "constructing with uri '" + mHttpUri + "'." );
 
+  mSupportedGetFeatureFormats = QStringList() << "text/html" << "text/plain" << "text/xml" << "application/vnd.ogc.gml";
+
   mValid = false;
 
   // URL may contain username/password information for a WMS
@@ -117,9 +119,6 @@ QgsWmsProvider::QgsWmsProvider( QString const &uri )
   // 1) http://xxx.xxx.xx/yyy/yyy
   // 2) http://xxx.xxx.xx/yyy/yyy?
   // 3) http://xxx.xxx.xx/yyy/yyy?zzz=www
-
-
-  mSupportedGetFeatureFormats = QStringList() << "text/html" << "text/plain" << "text/xml";
 
   mValid = true;
   QgsDebugMsg( "exiting constructor." );
@@ -3221,20 +3220,35 @@ int QgsWmsProvider::capabilities() const
 
   if ( canIdentify )
   {
-    foreach ( QString f, mCapabilities.capability.request.getFeatureInfo.format )
+    if ( identifyCapabilities() )
     {
-      if ( mSupportedGetFeatureFormats.contains( f ) )
-      {
-        // Collect all the test results into one bitmask
-        capability |= QgsRasterDataProvider::Identify;
-        if ( f == "text/html" ) capability |= QgsRasterDataProvider::IdentifyHtml;
-        else if ( f == "text/plain" ) capability |= QgsRasterDataProvider::IdentifyText;
-      }
+      capability |= identifyCapabilities() | Identify;
     }
   }
+  QgsDebugMsg( QString( "capability = %1" ).arg( capability ) );
+  return capability;
+}
 
-  QgsDebugMsg( "exiting with '"  + QString::number( capability, 2 )  + "'." );
+int QgsWmsProvider::identifyCapabilities() const
+{
+  int capability = NoCapabilities;
 
+  foreach ( QString f, mCapabilities.capability.request.getFeatureInfo.format )
+  {
+    if ( mSupportedGetFeatureFormats.contains( f ) )
+    {
+      QgsDebugMsg( "supported format = " + f );
+      // 1.0: MIME - server shall choose format, we presume it to be plain text
+      //      GML.1, GML.2, or GML.3
+      // 1.1.0, 1.3.0 - mime types
+      if ( f == "MIME" ) capability |= IdentifyText; // 1.0
+      else if ( f == "text/plain" ) capability |= IdentifyText;
+      else if ( f == "text/html" ) capability |= IdentifyHtml;
+      else if ( f.startsWith( "GML." ) ) capability |= IdentifyFeature; // 1.0
+      else if ( f == "application/vnd.ogc.gml" ) capability |= IdentifyFeature;
+    }
+  }
+  QgsDebugMsg( QString( "capability = %1" ).arg( capability ) );
   return capability;
 }
 

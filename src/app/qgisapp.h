@@ -544,7 +544,7 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
     /** Open a raster layer using the Raster Data Provider.
      *  \note added in 1.9
      */
-    QgsRasterLayer* addRasterLayer( QString const & uri, QString const & baseName, QString const & providerKey );
+    QgsRasterLayer* addRasterLayer( QString const & uri, QString const & baseName, QString const & providerKey, const QgsRasterLayerParamMap & params = QgsRasterLayerParamMap() );
 
     void addWfsLayer( QString uri, QString typeName );
 

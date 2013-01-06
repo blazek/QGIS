@@ -10,6 +10,13 @@ class QgsRasterLayer : QgsMapLayer
 %End
 
   public:
+    /** Raster layer parameters */
+    enum Param
+    {
+      /* default identify format */
+      IdentifyFormat = 1
+    };
+
     /**  \brief Default cumulative cut lower limit */
     static const double CUMULATIVE_CUT_LOWER;
 
@@ -40,13 +47,13 @@ class QgsRasterLayer : QgsMapLayer
      * */
     QgsRasterLayer( const QString & path,
                     const QString &  baseName = QString::null,
-                    bool loadDefaultStyleFlag = true );
+                    const QMap<QgsRasterLayer::Param,QVariant> & params = QMap<QgsRasterLayer::Param,QVariant>() );
 
     /**  \brief [ data provider interface ] Constructor in provider mode */
     QgsRasterLayer( const QString & uri,
                     const QString & baseName,
                     const QString & providerKey,
-                    bool loadDefaultStyleFlag = true );
+                    const QMap<QgsRasterLayer::Param,QVariant> & params = QMap<QgsRasterLayer::Param,QVariant>() );
 
     /** \brief The destructor */
     ~QgsRasterLayer();
