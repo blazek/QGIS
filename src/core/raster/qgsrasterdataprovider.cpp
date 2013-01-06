@@ -559,4 +559,47 @@ QgsRasterDataProvider* QgsRasterDataProvider::create( const QString &providerKey
   return createFn( uri, format, nBands, type, width, height, geoTransform, crs, createOptions );
 }
 
+QString QgsRasterDataProvider::identifyFormatName( IdentifyFormat format )
+{
+  switch ( format )
+  {
+    case IdentifyFormatValue:
+      return "Value";
+    case IdentifyFormatText:
+      return "Text";
+    case IdentifyFormatHtml:
+      return "Html";
+    case IdentifyFormatFeature:
+      return "Feature";
+    default:
+      return "Undefined";
+  }
+}
+
+QgsRasterDataProvider::IdentifyFormat QgsRasterDataProvider::identifyFormatFromName( QString formatName )
+{
+  if ( formatName == "Value" ) return IdentifyFormatValue;
+  if ( formatName == "Text" ) return IdentifyFormatText;
+  if ( formatName == "Html" ) return IdentifyFormatHtml;
+  if ( formatName == "Feature" ) return IdentifyFormatFeature;
+  return IdentifyFormatUndefined;
+}
+
+QgsRasterInterface::Capability QgsRasterDataProvider::identifyFormatToCapability( IdentifyFormat format )
+{
+  switch ( format )
+  {
+    case IdentifyFormatValue:
+      return IdentifyValue;
+    case IdentifyFormatText:
+      return IdentifyText;
+    case IdentifyFormatHtml:
+      return IdentifyHtml;
+    case IdentifyFormatFeature:
+      return IdentifyFeature;
+    default:
+      return NoCapabilities;
+  }
+}
+
 // ENDS

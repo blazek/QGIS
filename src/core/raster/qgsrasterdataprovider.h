@@ -84,13 +84,14 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
 
     enum IdentifyFormat
     {
-      IdentifyFormatValue = 0,
-      IdentifyFormatText  = 1,
-      IdentifyFormatHtml  = 1 << 1,
+      IdentifyFormatUndefined = 0,
+      IdentifyFormatValue = 1,
+      IdentifyFormatText  = 1 << 1,
+      IdentifyFormatHtml  = 1 << 2,
       // In future it should be possible to get from GetFeatureInfo (WMS) in GML
       // vector features. It is possible to use a user type with QVariant if
       // a class is declared with Q_DECLARE_METATYPE
-      IdentifyFormatFeature = 1 << 2
+      IdentifyFormatFeature = 1 << 3
     };
 
     // Progress types
@@ -461,6 +462,10 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
     virtual QString validatePyramidsConfigOptions( RasterPyramidsFormat pyramidsFormat,
         const QStringList & theConfigOptions, const QString & fileFormat )
     { Q_UNUSED( pyramidsFormat ); Q_UNUSED( theConfigOptions ); Q_UNUSED( fileFormat ); return QString(); }
+
+    static QString identifyFormatName( IdentifyFormat format );
+    static IdentifyFormat identifyFormatFromName( QString formatName );
+    static Capability identifyFormatToCapability( IdentifyFormat format );
 
   signals:
     /** Emit a signal to notify of the progress event.

@@ -139,9 +139,10 @@ QgsWMSSourceSelect::QgsWMSSourceSelect( QWidget * parent, Qt::WFlags fl, bool ma
     tabLayers->layout()->removeWidget( gbCRS );
   }
 
+  clear();
+
   // set up the WMS connections we already know about
   populateConnectionList();
-
 
   QSettings settings;
   QgsDebugMsg( "restoring geometry" );
@@ -270,18 +271,28 @@ QgsNumericSortTreeWidgetItem *QgsWMSSourceSelect::createItem(
   return item;
 }
 
-bool QgsWMSSourceSelect::populateLayerList( QgsWmsProvider *wmsProvider )
+void QgsWMSSourceSelect::clear()
 {
-  mCRSs.clear();
+  lstLayers->clear();
+  lstTilesets->clearContents();
 
-  QVector<QgsWmsLayerProperty> layers;
-  if ( !wmsProvider->supportedLayers( layers ) )
-    return false;
+  mCRSs.clear();
 
   foreach ( QAbstractButton *b, mImageFormatGroup->buttons() )
   {
     b->setHidden( true );
   }
+
+  mFeatureInfoFormatComboBox->clear();
+  mFeatureInfoFormatComboBox->setEnabled( false );
+  mFeatureCount->setEnabled( false );
+}
+
+bool QgsWMSSourceSelect::populateLayerList( QgsWmsProvider *wmsProvider )
+{
+  QVector<QgsWmsLayerProperty> layers;
+  if ( !wmsProvider->supportedLayers( layers ) )
+    return false;
 
   foreach ( QString encoding, wmsProvider->supportedImageEncodings() )
   {
@@ -302,7 +313,6 @@ bool QgsWMSSourceSelect::populateLayerList( QgsWmsProvider *wmsProvider )
   QMap<int, QStringList> layerParentNames;
   wmsProvider->layerParents( layerParents, layerParentNames );
 
-  lstLayers->clear();
   lstLayers->setSortingEnabled( true );
 
   int layerAndStyleCount = -1;
@@ -418,6 +428,8 @@ bool QgsWMSSourceSelect::populateLayerList( QgsWmsProvider *wmsProvider )
 
 void QgsWMSSourceSelect::on_btnConnect_clicked()
 {
+  clear();
+
   mConnName = cmbConnections->currentText();
 
   QgsWMSConnection connection( cmbConnections->currentText() );
@@ -436,6 +448,29 @@ void QgsWMSSourceSelect::on_btnConnect_clicked()
     if ( !populateLayerList( wmsProvider ) )
     {
       showError( wmsProvider );
+    }
+    else
+    {
+      int capabilities = wmsProvider->identifyCapabilities();
+      QgsDebugMsg( "capabilities = " + QString::number( capabilities ) );
+      if ( capabilities & QgsRasterInterface::IdentifyFeature )
+      {
+        mFeatureInfoFormatComboBox->addItem( tr( "GML" ), QgsRasterDataProvider::IdentifyFormatFeature );
+      }
+      if ( capabilities & QgsRasterInterface::IdentifyHtml )
+      {
+        mFeatureInfoFormatComboBox->addItem( tr( "HTML" ), QgsRasterDataProvider::IdentifyFormatHtml );
+      }
+      if ( capabilities & QgsRasterInterface::IdentifyText )
+      {
+        mFeatureInfoFormatComboBox->addItem( tr( "Text" ), QgsRasterDataProvider::IdentifyFormatText );
+      }
+
+      if ( capabilities & QgsRasterInterface::Identify )
+      {
+        mFeatureInfoFormatComboBox->setEnabled( true );
+        mFeatureCount->setEnabled( true );
+      }
     }
 
     delete wmsProvider;
@@ -531,18 +566,27 @@ void QgsWMSSourceSelect::addClicked()
   uri.setParam( "styles", styles );
   uri.setParam( "format", format );
   uri.setParam( "crs", crs );
+  QgsDebugMsg( QString( "crs=%2 " ).arg( crs ) );
 
   if ( mFeatureCount->text().toInt() > 0 )
   {
     uri.setParam( "featureCount", mFeatureCount->text() );
   }
 
-  QgsDebugMsg( QString( "crs=%2 " ).arg( crs ) );
+  QgsRasterLayerParamMap params;
+  if ( mFeatureInfoFormatComboBox->currentIndex() >= 0 )
+  {
+    QgsRasterDataProvider::IdentifyFormat identifyFormat = ( QgsRasterDataProvider::IdentifyFormat ) mFeatureInfoFormatComboBox->itemData( mFeatureInfoFormatComboBox->currentIndex() ).toInt();
 
+    //QString formatName = QgsRasterDataProvider::identifyFormatName( identifyFormat );
+    //uri.setParam( "identifyFormat", formatName );
+    params.insert( QgsRasterLayer::IdentifyFormat, identifyFormat );
+  }
   QgsDebugMsg( "uri = " + uri.encodedUri() );
+
   emit addRasterLayer( uri.encodedUri(),
                        leLayerName->text().isEmpty() ? layers.join( "/" ) : leLayerName->text(),
-                       "wms" );
+                       "wms", params );
 
 }
 
