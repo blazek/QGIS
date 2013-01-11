@@ -26,9 +26,10 @@
 #include <QStringList>
 
 QgsNetworkReplyParser::QgsNetworkReplyParser( QNetworkReply *reply )
-  : mReply(reply)
-  , mValid(false)
+    : mReply( reply )
+    , mValid( false )
 {
+  QgsDebugMsg( "Entered." );
   if ( !mReply ) return;
 
   // Content type examples:
@@ -37,7 +38,7 @@ QgsNetworkReplyParser::QgsNetworkReplyParser( QNetworkReply *reply )
   if ( !isMultipart( mReply ) )
   {
     // reply is not multipart, copy body and headers
-    QMap<QByteArray,QByteArray> headers;
+    QMap<QByteArray, QByteArray> headers;
     foreach ( QByteArray h, mReply->rawHeaderList() )
     {
       headers.insert( h, mReply->rawHeader( h ) );
@@ -105,10 +106,10 @@ QgsNetworkReplyParser::QgsNetworkReplyParser( QNetworkReply *reply )
         pos++;
       }
       // parse headers
-      QMap<QByteArray,QByteArray> headersMap;
+      QMap<QByteArray, QByteArray> headersMap;
       QByteArray headers = part.left( pos );
       QgsDebugMsg( "headers:\n" + headers );
-      
+
       QStringList headerRows = QString( headers ).split( QRegExp( "[\n\r]+" ) );
       foreach ( QString row, headerRows )
       {
@@ -123,7 +124,7 @@ QgsNetworkReplyParser::QgsNetworkReplyParser( QNetworkReply *reply )
       from = to + boundary.length() + 1;
     }
   }
-  mValid = true; 
+  mValid = true;
 }
 
 bool QgsNetworkReplyParser::isMultipart( QNetworkReply *reply )

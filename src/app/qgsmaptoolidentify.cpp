@@ -353,7 +353,8 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, int x, int 
   if ( !layer ) return false;
 
   QgsRasterDataProvider *dprovider = layer->dataProvider();
-  if ( !dprovider || !( dprovider->capabilities() & QgsRasterDataProvider::Identify ) )
+  int capabilities = dprovider->capabilities();
+  if ( !dprovider || !( capabilities & QgsRasterDataProvider::Identify ) )
   {
     return false;
   }
@@ -377,12 +378,26 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, int x, int 
 
   QMap< QString, QString > attributes, derivedAttributes;
 
+  QMap<int, QVariant> values;
+  QgsRasterDataProvider::IdentifyFormat format = ( QgsRasterDataProvider::IdentifyFormat ) layer->param( QgsRasterLayer::IdentifyFormat ).toInt();
+
+  // check if the format is really supported otherwise use first supported format
+  if ( !QgsRasterDataProvider::identifyFormatToCapability( format ) & capabilities )
+  {
+    if ( capabilities & QgsRasterInterface::IdentifyFeature ) format = QgsRasterDataProvider::IdentifyFormatFeature;
+    else if ( capabilities & QgsRasterInterface::IdentifyValue ) format = QgsRasterDataProvider::IdentifyFormatValue;
+    else if ( capabilities & QgsRasterInterface::IdentifyHtml ) format = QgsRasterDataProvider::IdentifyFormatHtml;
+    else if ( capabilities & QgsRasterInterface::IdentifyText ) format = QgsRasterDataProvider::IdentifyFormatText;
+    else return false;
+  }
+
   // We can only use context (extent, width, heigh) if layer is not reprojected,
   // otherwise we don't know source resolution (size).
   if ( mCanvas->hasCrsTransformEnabled() && dprovider->crs() != mCanvas->mapRenderer()->destinationCrs() )
   {
     viewExtent = toLayerCoordinates( layer, viewExtent );
-    attributes = dprovider->identify( idPoint );
+    //attributes = dprovider->identify( idPoint );
+    values = dprovider->identify( idPoint, format );
   }
   else
   {
@@ -406,7 +421,47 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, int x, int 
     QgsDebugMsg( QString( "width = %1 height = %2" ).arg( width ).arg( height ) );
     QgsDebugMsg( QString( "xRes = %1 yRes = %2 mapUnitsPerPixel = %3" ).arg( viewExtent.width() / width ).arg( viewExtent.height() / height ).arg( mapUnitsPerPixel ) );
 
-    attributes = dprovider->identify( idPoint, viewExtent, width, height );
+    //attributes = dprovider->identify( idPoint, viewExtent, width, height );
+    values = dprovider->identify( idPoint, format, viewExtent, width, height );
+  }
+
+  if ( format == QgsRasterDataProvider::IdentifyFormatValue )
+  {
+    foreach ( int bandNo, values.keys() )
+    {
+      double value = values.value( bandNo ).toDouble();
+      QString valueString;
+      if ( dprovider->isNoDataValue( bandNo, value ) )
+      {
+        valueString = tr( "no data" );
+      }
+      else
+      {
+        valueString = QgsRasterBlock::printValue( value );
+      }
+      attributes.insert( dprovider->generateBandName( bandNo ), valueString );
+    }
+  }
+  else if ( format == QgsRasterDataProvider::IdentifyFormatFeature )
+  {
+    foreach ( int i, values.keys() )
+    {
+      attributes.insert( values.value( i ).toString(), "" );
+    }
+  }
+  else // text or html
+  {
+    foreach ( int bandNo, values.keys() )
+    {
+      QString value = values.value( bandNo ).toString();
+      // TODO: better 'attribute' name, in theory it may be something else than WMS
+      // feature info
+      if ( format == QgsRasterDataProvider::IdentifyFormatText )
+      {
+        value = "<pre>" + value + "</pre>";
+      }
+      attributes.insert( tr( "Feature info" ), value );
+    }
   }
 
   QString type;

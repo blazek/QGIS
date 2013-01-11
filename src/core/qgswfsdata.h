@@ -26,6 +26,8 @@
 #include <set>
 #include <stack>
 #include <QPair>
+#include <QByteArray>
+#include <QDomElement>
 class QgsRectangle;
 class QgsCoordinateReferenceSystem;
 
@@ -44,7 +46,6 @@ class CORE_EXPORT QgsWFSData: public QObject
       const QMap<QString, QPair<int, QgsField> >& thematicAttributes,
       QGis::WkbType* wkbType );
     ~QgsWFSData();
-
     /**Does the Http GET request to the wfs server
        @param query string (to define the requested typename)
        @param extent the extent of the WFS layer
@@ -53,11 +54,22 @@ class CORE_EXPORT QgsWFSData: public QObject
     @return 0 in case of success*/
     int getWFSData();
 
+    /** Read from give GML. Constructor uri param is ignored */
+    int getWFSData( const QByteArray &data );
+
+    /** Get fields info from XSD */
+    bool parseXSD( const QByteArray &xml );
+
+    QMap<int, QgsField> fields();
+
   private slots:
     void setFinished();
 
     /**Takes progress value and total steps and emit signals 'dataReadProgress' and 'totalStepUpdate'*/
     void handleProgressEvent( qint64 progress, qint64 totalSteps );
+
+    QList<QDomElement> domElements( const QDomElement &element, const QString & path );
+    QString stripNS( const QString & name );
 
   signals:
     void dataReadProgress( int progress );
@@ -149,7 +161,8 @@ class CORE_EXPORT QgsWFSData: public QObject
     QMap<QgsFeatureId, QString > &mIdMap;
     /**Name of geometry attribute*/
     QString mGeometryAttribute;
-    const QMap<QString, QPair<int, QgsField> > &mThematicAttributes;
+    //const QMap<QString, QPair<int, QgsField> > &mThematicAttributes;
+    QMap<QString, QPair<int, QgsField> > mThematicAttributes;
     QGis::WkbType* mWkbType;
     /**True if the request is finished*/
     bool mFinished;

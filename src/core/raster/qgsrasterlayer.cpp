@@ -2476,6 +2476,12 @@ bool QgsRasterLayer::readXml( const QDomNode& layer_node )
     }
   }
 
+  QString identifyFormat = layer_node.namedItem( "identify" ).toElement().attribute( "format" );
+  if ( !identifyFormat.isEmpty() )
+  {
+    mIdentifyFormat = QgsRasterDataProvider::identifyFormatFromName( identifyFormat );
+  }
+
   return res;
 } // QgsRasterLayer::readXml( QDomNode & layer_node )
 
@@ -2559,6 +2565,11 @@ bool QgsRasterLayer::writeXml( QDomNode & layer_node,
   {
     layer_node.appendChild( noData );
   }
+
+  // Identify format
+  QDomElement identify  = document.createElement( "identify" );
+  identify.setAttribute( "format", QgsRasterDataProvider::identifyFormatName( mIdentifyFormat ) );
+  layer_node.appendChild( identify );
 
   //write out the symbology
   QString errorMsg;
