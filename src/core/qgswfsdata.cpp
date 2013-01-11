@@ -49,7 +49,7 @@ QgsWFSData::QgsWFSData(
     mFinished( false ),
     mFeatureCount( 0 )
 {
-  //find out mTypeName from uri
+  //find out mTypeName from uri (what about reading from local file?)
   QStringList arguments = uri.split( "&" );
   QStringList::const_iterator it;
   for ( it = arguments.constBegin(); it != arguments.constEnd(); ++it )
@@ -137,6 +137,22 @@ int QgsWFSData::getWFSData()
   }
 
   XML_ParserFree( p );
+  return 0;
+}
+
+int QgsWFSData::getWFSData( const QByteArray &data )
+{
+  QgsDebugMsg( "Entered" );
+  if ( mExtent )
+  {
+    mExtent->set( 0, 0, 0, 0 );
+  }
+  XML_Parser p = XML_ParserCreateNS( NULL, NS_SEPARATOR );
+  XML_SetUserData( p, this );
+  XML_SetElementHandler( p, QgsWFSData::start, QgsWFSData::end );
+  XML_SetCharacterDataHandler( p, QgsWFSData::chars );
+  int atEnd = 1;
+  XML_Parse( p, data.constData(), data.size(), atEnd );
   return 0;
 }
 
@@ -865,4 +881,87 @@ void QgsWFSData::calculateExtentFromFeatures() const
     }
   }
   ( *mExtent ) = bbox;
+}
+
+bool QgsWFSData::parseXSD( const QByteArray &xml )
+{
+  QDomDocument dom;
+  QString errorMsg;
+  int errorLine;
+  int errorColumn;
+  if ( !dom.setContent( xml, false, &errorMsg, &errorLine, &errorColumn ) )
+  {
+    // TODO: error
+    return false;
+  }
+
+  QDomElement docElem = dom.documentElement();
+
+  // TODO: test docElem.tagName()
+
+  QList<QDomElement> elements = domElements( docElem, "complexType.complexContent.extension.sequence.element" );
+
+  QgsDebugMsg( QString( "%1 elemets read" ).arg( elements.size() ) );
+
+  int count = 0;
+  foreach ( QDomElement el, elements )
+  {
+    QString name = el.attribute( "name" );
+    QgsDebugMsg( QString( "name = %1" ).arg( name ) );
+    QgsField field( name, QVariant::String, "text" );
+    mThematicAttributes.insert( name, qMakePair( count, field ) );
+    count++;
+  }
+
+  return true;
+}
+
+QString QgsWFSData::stripNS( const QString & name )
+{
+  return name.contains( ":" ) ? name.section( ':', 1 ) : name;
+}
+
+QList<QDomElement> QgsWFSData::domElements( const QDomElement &element, const QString & path )
+{
+  QList<QDomElement> list;
+
+  QStringList names = path.split( "." );
+  if ( names.size() == 0 ) return list;
+  QString name = names.value( 0 );
+  names.removeFirst();
+
+  QDomNode n1 = element.firstChild();
+  while ( !n1.isNull() )
+  {
+    QDomElement el = n1.toElement();
+    if ( !el.isNull() )
+    {
+      QString tagName = stripNS( el.tagName() );
+      if ( tagName == name )
+      {
+        if ( names.size() == 0 )
+        {
+          list.append( el );
+        }
+        else
+        {
+          list.append( domElements( el,  names.join( "." ) ) );
+        }
+      }
+    }
+    n1 = n1.nextSibling();
+  }
+
+  return list;
+}
+
+QMap<int, QgsField> QgsWFSData::fields()
+{
+  QMap<int, QgsField>fields;
+  foreach ( QString key, mThematicAttributes.keys() )
+  {
+    QPair<int, QgsField> val = mThematicAttributes.value( key );
+    fields.insert( val.first, val.second );
+  }
+  return fields;
 }

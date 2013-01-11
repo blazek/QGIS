@@ -466,7 +466,7 @@ void QgsWMSSourceSelect::on_btnConnect_clicked()
         mFeatureInfoFormatComboBox->addItem( tr( "Text" ), QgsRasterDataProvider::IdentifyFormatText );
       }
 
-      if ( capabilities & QgsRasterInterface::Identify )
+      if ( capabilities ) // at least one identify capability
       {
         mFeatureInfoFormatComboBox->setEnabled( true );
         mFeatureCount->setEnabled( true );

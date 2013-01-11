@@ -1001,6 +1001,9 @@ class QgsWmsProvider : public QgsRasterDataProvider
      */
     QString mIdentifyResult;
 
+    // TODO: better
+    QString mIdentifyResultXsd;
+
     /**
      * The previous parameters to draw().
      */
@@ -1079,7 +1082,11 @@ class QgsWmsProvider : public QgsRasterDataProvider
     //! supported formats for GetFeatureInfo in order of preference
     QStringList mSupportedGetFeatureFormats;
 
+    //! Formats supported by server and provider
+    QMap<IdentifyFormat, QString> mIdentifyFormats;
+
     QgsCoordinateReferenceSystem mCrs;
+
 };
 
 

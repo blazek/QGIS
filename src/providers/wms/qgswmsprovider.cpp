@@ -32,9 +32,11 @@
 #include "qgsrasterlayer.h"
 #include "qgsrectangle.h"
 #include "qgscoordinatereferencesystem.h"
-#include "qgsnetworkaccessmanager.h"
 #include "qgsmessageoutput.h"
 #include "qgsmessagelog.h"
+#include "qgsnetworkaccessmanager.h"
+#include "qgsnetworkreplyparser.h"
+#include "qgswfsdata.h"
 
 #include <QNetworkRequest>
 #include <QNetworkReply>
@@ -1385,7 +1387,30 @@ bool QgsWmsProvider::retrieveServerCapabilities( bool forceRefresh )
 
       return false;
     }
-
+    else
+    {
+      // get identify formats
+      foreach ( QString f, mCapabilities.capability.request.getFeatureInfo.format )
+      {
+        // Don't use mSupportedGetFeatureFormats, there are too many possibilities
+        //if ( mSupportedGetFeatureFormats.contains( f ) )
+        //{
+        QgsDebugMsg( "supported format = " + f );
+        // 1.0: MIME - server shall choose format, we presume it to be plain text
+        //      GML.1, GML.2, or GML.3
+        // 1.1.0, 1.3.0 - mime types, GML should use application/vnd.ogc.gml
+        //      but in UMN Mapserver it may be also OUTPUTFORMAT, e.g. OGRGML
+        IdentifyFormat format;
+        if ( f == "MIME" ) format = IdentifyFormatText; // 1.0
+        else if ( f == "text/plain" ) format = IdentifyFormatText;
+        else if ( f == "text/html" ) format = IdentifyFormatHtml;
+        else if ( f.startsWith( "GML." ) ) format = IdentifyFormatFeature; // 1.0
+        else if ( f == "application/vnd.ogc.gml" ) format = IdentifyFormatFeature;
+        else if ( f.contains( "gml", Qt::CaseInsensitive ) ) format = IdentifyFormatFeature;
+        mIdentifyFormats.insert( format, f );
+        //}
+      }
+    }
   }
 
   QgsDebugMsg( "exiting." );
@@ -3248,21 +3273,11 @@ int QgsWmsProvider::identifyCapabilities() const
 {
   int capability = NoCapabilities;
 
-  foreach ( QString f, mCapabilities.capability.request.getFeatureInfo.format )
+  foreach ( IdentifyFormat f, mIdentifyFormats.keys() )
   {
-    if ( mSupportedGetFeatureFormats.contains( f ) )
-    {
-      QgsDebugMsg( "supported format = " + f );
-      // 1.0: MIME - server shall choose format, we presume it to be plain text
-      //      GML.1, GML.2, or GML.3
-      // 1.1.0, 1.3.0 - mime types
-      if ( f == "MIME" ) capability |= IdentifyText; // 1.0
-      else if ( f == "text/plain" ) capability |= IdentifyText;
-      else if ( f == "text/html" ) capability |= IdentifyHtml;
-      else if ( f.startsWith( "GML." ) ) capability |= IdentifyFeature; // 1.0
-      else if ( f == "application/vnd.ogc.gml" ) capability |= IdentifyFeature;
-    }
+    capability |= identifyFormatToCapability( f );
   }
+
   QgsDebugMsg( QString( "capability = %1" ).arg( capability ) );
   return capability;
 }
@@ -3821,25 +3836,15 @@ QString QgsWmsProvider::metadata()
 
 QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, IdentifyFormat theFormat, const QgsRectangle &theExtent, int theWidth, int theHeight )
 {
-  QgsDebugMsg( "Entering." );
+  QgsDebugMsg( QString( "theFormat = %1" ).arg( theFormat ) );
   QStringList resultStrings;
   QMap<int, QVariant> results;
 
   QString format;
-  if ( theFormat == IdentifyFormatHtml )
-  {
-    if ( !( capabilities() & IdentifyHtml ) ) return results;
-    format = "text/html";
-  }
-  else if ( theFormat == IdentifyFormatText )
-  {
-    if ( !( capabilities() & IdentifyText ) ) return results;
-    format = "text/plain";
-  }
-  else
-  {
-    return results;
-  }
+  format = mIdentifyFormats.value( theFormat );
+  if ( format.isEmpty() ) return results;
+
+  QgsDebugMsg( "format = " + format );
 
   if ( !extent().contains( thePoint ) )
   {
@@ -3969,7 +3974,43 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
       QCoreApplication::processEvents( QEventLoop::ExcludeUserInputEvents );
     }
 
-    resultStrings << mIdentifyResult;
+    if ( theFormat == IdentifyFormatHtml || theFormat == IdentifyFormatText )
+    {
+      resultStrings << mIdentifyResult;
+    }
+    else if ( theFormat == IdentifyFormatFeature ) // GML
+    {
+      QgsDebugMsg( "GML:\n" + mIdentifyResult );
+      QgsRectangle extent;
+      QMap<QgsFeatureId, QgsFeature* > features;
+      QMap<QgsFeatureId, QString > idMap;
+      QString geometryAttribute; // ???
+      QMap<QString, QPair<int, QgsField> > thematicAttributes; // ???
+      QGis::WkbType wkbType;
+      QString uri;
+      //QString uri = "TYPENAME=cr";
+      QgsWFSData dataReader( uri, &extent, features, idMap, geometryAttribute, thematicAttributes, &wkbType );
+      // parse XSD
+      dataReader.parseXSD( mIdentifyResultXsd.toAscii() );
+
+      // TODO: avoid converting to string and back
+      int ret = dataReader.getWFSData( mIdentifyResult.toAscii() );
+      QgsDebugMsg( QString( "parsing result = %1" ).arg( ret ) );
+      QMap<int, QgsField> fields = dataReader.fields();
+      QString result;
+      foreach ( QgsFeatureId id, features.keys() )
+      {
+        QgsFeature * f = features.value( id );
+        QgsDebugMsg( QString( "feature id = %1" ).arg( id ) );
+        foreach ( int i, f->attributeMap().keys() )
+        {
+          QgsDebugMsg( QString( "  %1 : %2" ).arg( i ).arg( f->attributeMap().value( i ).toString() ) );
+          QString s = QString( "%1 : %2" ).arg( fields.value( i ).name() ).arg( f->attributeMap().value( i ).toString() );
+          result += s + "\n";
+        }
+      }
+      results.insert( 0, result ) ;
+    }
   }
 
   QString str;
@@ -3977,13 +4018,17 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
   if ( theFormat == IdentifyFormatHtml )
   {
     str = "<table>\n<tr><td>" + resultStrings.join( "</td></tr>\n<tr><td>" ) + "</td></tr>\n</table>";
+    results.insert( 1, str );
   }
   else if ( theFormat == IdentifyFormatText )
   {
     str = resultStrings.join( "\n-------------\n" );
+    results.insert( 1, str );
   }
+  else if ( theFormat == IdentifyFormatFeature ) // GML
+  {
 
-  results.insert( 1, str );
+  }
 
   return results;
 }
@@ -4018,7 +4063,30 @@ void QgsWmsProvider::identifyReplyFinished()
       mIdentifyResult = "";
     }
 
-    mIdentifyResult = QString::fromUtf8( mIdentifyReply->readAll() );
+    if ( QgsNetworkReplyParser::isMultipart( mIdentifyReply ) )
+    {
+      QgsNetworkReplyParser parser( mIdentifyReply );
+      if ( !parser.isValid() )
+      {
+        QgsDebugMsg( "Cannot parse multipart" );
+        mErrorFormat = "text/plain";
+        mError = tr( "Cannot parse multipart getfeatureinfo: %1" ).arg( parser.error() );
+        emit statusChanged( mError );
+        mIdentifyResult = "";
+      }
+      else
+      {
+        // TODO: check headers, xsd ...
+        // take first body - GML for now
+        QgsDebugMsg( QString( "%1 parts in multipart" ).arg( parser.parts() ) );
+        mIdentifyResult = parser.body( 0 );
+        mIdentifyResultXsd = parser.body( 1 );
+      }
+    }
+    else
+    {
+      mIdentifyResult = QString::fromUtf8( mIdentifyReply->readAll() );
+    }
   }
   else
   {
