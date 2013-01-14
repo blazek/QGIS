@@ -22,7 +22,6 @@
 #include "qgisgui.h"
 #include "qgscontexthelp.h"
 
-#include "qgsrasterlayer.h"
 #include "qgswmsprovider.h"
 
 #include <QStringList>
@@ -150,6 +149,7 @@ class QgsWMSSourceSelect : public QDialog, private Ui::QgsWMSSourceSelectBase
     //! Map mime types to supported formats
     QMap<QString, int> mMimeMap;
 
+
     // Clear layers list, crs, encodings ...
     void clear();
 
@@ -210,8 +210,7 @@ class QgsWMSSourceSelect : public QDialog, private Ui::QgsWMSSourceSelectBase
   signals:
     void addRasterLayer( QString const & rasterLayerPath,
                          QString const & baseName,
-                         QString const & providerKey,
-                         const QgsRasterLayerParamMap & params );
+                         QString const & providerKey );
     void connectionsChanged();
   private slots:
     void on_btnSearch_clicked();
