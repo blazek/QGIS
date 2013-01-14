@@ -3013,8 +3013,8 @@ void QgisApp::addWmsLayer()
     QMessageBox::warning( this, tr( "WMS" ), tr( "Cannot get WMS select dialog from provider." ) );
     return;
   }
-  connect( wmss , SIGNAL( addRasterLayer( QString const &, QString const &, QString const &, const QgsRasterLayerParamMap & ) ),
-           this , SLOT( addRasterLayer( QString const &, QString const &, QString const &, const QgsRasterLayerParamMap & ) ) );
+  connect( wmss , SIGNAL( addRasterLayer( QString const &, QString const &, QString const & ) ),
+           this , SLOT( addRasterLayer( QString const &, QString const &, QString const & ) ) );
   wmss->exec();
   delete wmss;
 }
@@ -8060,8 +8060,7 @@ QgsRasterLayer* QgisApp::addRasterLayer( QString const & rasterFile, QString con
 QgsRasterLayer* QgisApp::addRasterLayer(
   QString const &uri,
   QString const &baseName,
-  QString const &providerKey,
-  const QgsRasterLayerParamMap & params )
+  QString const &providerKey )
 {
   QgsDebugMsg( "about to get library for " + providerKey );
 
@@ -8077,7 +8076,7 @@ QgsRasterLayer* QgisApp::addRasterLayer(
   QgsDebugMsg( "Creating new raster layer using " + uri
                + " with baseName of " + baseName );
 
-  layer = new QgsRasterLayer( uri, baseName, providerKey, params );
+  layer = new QgsRasterLayer( uri, baseName, providerKey );
 
   QgsDebugMsg( "Constructed new layer." );
 

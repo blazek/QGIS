@@ -283,8 +283,6 @@ void QgsWMSSourceSelect::clear()
     b->setHidden( true );
   }
 
-  mFeatureInfoFormatComboBox->clear();
-  mFeatureInfoFormatComboBox->setEnabled( false );
   mFeatureCount->setEnabled( false );
 }
 
@@ -453,22 +451,8 @@ void QgsWMSSourceSelect::on_btnConnect_clicked()
     {
       int capabilities = wmsProvider->identifyCapabilities();
       QgsDebugMsg( "capabilities = " + QString::number( capabilities ) );
-      if ( capabilities & QgsRasterInterface::IdentifyFeature )
-      {
-        mFeatureInfoFormatComboBox->addItem( tr( "GML" ), QgsRasterDataProvider::IdentifyFormatFeature );
-      }
-      if ( capabilities & QgsRasterInterface::IdentifyHtml )
-      {
-        mFeatureInfoFormatComboBox->addItem( tr( "HTML" ), QgsRasterDataProvider::IdentifyFormatHtml );
-      }
-      if ( capabilities & QgsRasterInterface::IdentifyText )
-      {
-        mFeatureInfoFormatComboBox->addItem( tr( "Text" ), QgsRasterDataProvider::IdentifyFormatText );
-      }
-
       if ( capabilities ) // at least one identify capability
       {
-        mFeatureInfoFormatComboBox->setEnabled( true );
         mFeatureCount->setEnabled( true );
       }
     }
@@ -573,20 +557,9 @@ void QgsWMSSourceSelect::addClicked()
     uri.setParam( "featureCount", mFeatureCount->text() );
   }
 
-  QgsRasterLayerParamMap params;
-  if ( mFeatureInfoFormatComboBox->currentIndex() >= 0 )
-  {
-    QgsRasterDataProvider::IdentifyFormat identifyFormat = ( QgsRasterDataProvider::IdentifyFormat ) mFeatureInfoFormatComboBox->itemData( mFeatureInfoFormatComboBox->currentIndex() ).toInt();
-
-    //QString formatName = QgsRasterDataProvider::identifyFormatName( identifyFormat );
-    //uri.setParam( "identifyFormat", formatName );
-    params.insert( QgsRasterLayer::IdentifyFormat, identifyFormat );
-  }
-  QgsDebugMsg( "uri = " + uri.encodedUri() );
-
   emit addRasterLayer( uri.encodedUri(),
                        leLayerName->text().isEmpty() ? layers.join( "/" ) : leLayerName->text(),
-                       "wms", params );
+                       "wms" );
 
 }
 

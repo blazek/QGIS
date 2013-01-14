@@ -368,10 +368,11 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, int x, int 
   QMap< QString, QString > attributes, derivedAttributes;
 
   QMap<int, QVariant> values;
-  QgsRasterDataProvider::IdentifyFormat format = ( QgsRasterDataProvider::IdentifyFormat ) layer->param( QgsRasterLayer::IdentifyFormat ).toInt();
+
+  QgsRasterDataProvider::IdentifyFormat format = QgsRasterDataProvider::identifyFormatFromName( layer->customProperty( "identify/format" ).toString() );
 
   // check if the format is really supported otherwise use first supported format
-  if ( !QgsRasterDataProvider::identifyFormatToCapability( format ) & capabilities )
+  if ( !( QgsRasterDataProvider::identifyFormatToCapability( format ) & capabilities ) )
   {
     if ( capabilities & QgsRasterInterface::IdentifyFeature ) format = QgsRasterDataProvider::IdentifyFormatFeature;
     else if ( capabilities & QgsRasterInterface::IdentifyValue ) format = QgsRasterDataProvider::IdentifyFormatValue;

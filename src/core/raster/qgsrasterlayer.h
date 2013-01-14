@@ -172,13 +172,6 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
 {
     Q_OBJECT
   public:
-    /** Raster layer parameters */
-    enum Param
-    {
-      /* default identify format */
-      IdentifyFormat = 1
-    };
-
     /**  \brief Default cumulative cut lower limit */
     static const double CUMULATIVE_CUT_LOWER;
 
@@ -209,13 +202,13 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
      * */
     QgsRasterLayer( const QString & path,
                     const QString &  baseName = QString::null,
-                    const QMap<Param, QVariant> & params = QMap<Param, QVariant>() );
+                    bool loadDefaultStyleFlag = true );
 
     /**  \brief [ data provider interface ] Constructor in provider mode */
     QgsRasterLayer( const QString & uri,
                     const QString & baseName,
                     const QString & providerKey,
-                    const QMap<Param, QVariant> & params = QMap<Param, QVariant>() );
+                    bool loadDefaultStyleFlag = true );
 
     /** \brief The destructor */
     ~QgsRasterLayer();
@@ -582,9 +575,6 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
     /** Time stamp of data source in the moment when data/metadata were loaded by provider */
     virtual QDateTime timestamp() const { return mDataProvider->timestamp() ; }
 
-    /** Generic access to layer parameters */
-    QVariant param( Param par ) const;
-
   public slots:
     /** \brief Create GDAL pyramid overviews */
     // QString buildPyramids( const RasterPyramidList &,
@@ -806,14 +796,6 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
     //QgsRasterRenderer* mRenderer;
     //QgsRasterResampleFilter *mResampleFilter;
     QgsRasterPipe mPipe;
-
-    /** Default identify format to be used by identify tool.
-     *  Used by WMS layers which can get feature info in multiple formats
-     *  (text, HTML, GML, ...)
-     */
-    QgsRasterDataProvider::IdentifyFormat mIdentifyFormat;
 };
-
-typedef QMap<QgsRasterLayer::Param, QVariant> QgsRasterLayerParamMap;
 
 #endif

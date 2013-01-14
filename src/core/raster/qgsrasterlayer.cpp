@@ -100,16 +100,15 @@ QgsRasterLayer::QgsRasterLayer()
     , mDataProvider( 0 )
     , mWidth( std::numeric_limits<int>::max() )
     , mHeight( std::numeric_limits<int>::max() )
-    , mIdentifyFormat( QgsRasterDataProvider::IdentifyFormatValue )
 {
   init();
   mValid = false;
 }
 
 QgsRasterLayer::QgsRasterLayer(
-  const QString & path,
-  const QString & baseName,
-  const QMap<Param, QVariant> & params )
+  QString const & path,
+  QString const & baseName,
+  bool loadDefaultStyleFlag )
     : QgsMapLayer( RasterLayer, baseName, path )
     // Constant that signals property not used.
     , QSTRING_NOT_SET( "Not Set" )
@@ -118,17 +117,8 @@ QgsRasterLayer::QgsRasterLayer(
     , mDataProvider( 0 )
     , mWidth( std::numeric_limits<int>::max() )
     , mHeight( std::numeric_limits<int>::max() )
-    , mIdentifyFormat( QgsRasterDataProvider::IdentifyFormatValue )
 {
   QgsDebugMsg( "Entered" );
-
-  // loadDefaultStyleFlag was originaly constructor param but it was not used at all
-  bool loadDefaultStyleFlag = true;
-
-  if ( params.count( IdentifyFormat ) == 1 )
-  {
-    mIdentifyFormat = ( QgsRasterDataProvider::IdentifyFormat ) params.value( IdentifyFormat ).toInt();
-  }
 
   // TODO, call constructor with provider key
   init();
@@ -154,7 +144,7 @@ QgsRasterLayer::QgsRasterLayer(
 QgsRasterLayer::QgsRasterLayer( const QString & uri,
                                 const QString & baseName,
                                 const QString & providerKey,
-                                const QMap<Param, QVariant> & params )
+                                bool loadDefaultStyleFlag )
     : QgsMapLayer( RasterLayer, baseName, uri )
     // Constant that signals property not used.
     , QSTRING_NOT_SET( "Not Set" )
@@ -166,19 +156,8 @@ QgsRasterLayer::QgsRasterLayer( const QString & uri,
     , mHeight( std::numeric_limits<int>::max() )
     , mModified( false )
     , mProviderKey( providerKey )
-    , mIdentifyFormat( QgsRasterDataProvider::IdentifyFormatValue )
 {
   QgsDebugMsg( "Entered" );
-
-  // loadDefaultStyleFlag was originaly constructor param but it was not used at all
-  bool loadDefaultStyleFlag = true;
-
-  if ( params.count( IdentifyFormat ) == 1 )
-  {
-    mIdentifyFormat = ( QgsRasterDataProvider::IdentifyFormat ) params.value( IdentifyFormat ).toInt();
-  }
-  QgsDebugMsg( QString( "mIdentifyFormat = %1" ).arg( mIdentifyFormat ) );
-
   init();
   setDataProvider( providerKey );
   if ( !mValid ) return;
@@ -2447,12 +2426,6 @@ bool QgsRasterLayer::readXml( const QDomNode& layer_node )
     }
   }
 
-  QString identifyFormat = layer_node.namedItem( "identify" ).toElement().attribute( "format" );
-  if ( !identifyFormat.isEmpty() )
-  {
-    mIdentifyFormat = QgsRasterDataProvider::identifyFormatFromName( identifyFormat );
-  }
-
   return res;
 } // QgsRasterLayer::readXml( QDomNode & layer_node )
 
@@ -2536,11 +2509,6 @@ bool QgsRasterLayer::writeXml( QDomNode & layer_node,
   {
     layer_node.appendChild( noData );
   }
-
-  // Identify format
-  QDomElement identify  = document.createElement( "identify" );
-  identify.setAttribute( "format", QgsRasterDataProvider::identifyFormatName( mIdentifyFormat ) );
-  layer_node.appendChild( identify );
 
   //write out the symbology
   QString errorMsg;
@@ -2799,8 +2767,3 @@ bool QgsRasterLayer::readColorTable( int theBandNumber, QList<QgsColorRampShader
   return true;
 }
 
-QVariant QgsRasterLayer::param( Param par ) const
-{
-  if ( par == IdentifyFormat ) return mIdentifyFormat;
-  return QVariant();
-}
