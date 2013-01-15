@@ -60,7 +60,10 @@ QgsMapToolIdentify::~QgsMapToolIdentify()
 QgsIdentifyResults *QgsMapToolIdentify::results()
 {
   if ( !mResults )
+  {
     mResults = new QgsIdentifyResults( mCanvas, mCanvas->window() );
+    connect( mResults, SIGNAL( formatChanged( QgsRasterLayer * ) ), this, SLOT( formatChanged( QgsRasterLayer * ) ) );
+  }
 
   return mResults;
 }
@@ -77,12 +80,23 @@ void QgsMapToolIdentify::canvasPressEvent( QMouseEvent *e )
 
 void QgsMapToolIdentify::canvasReleaseEvent( QMouseEvent *e )
 {
+  results()->clear();
   if ( !mCanvas || mCanvas->isDrawing() )
   {
     return;
   }
 
+  mLastPoint = mCanvas->getCoordinateTransform()->toMapCoordinates( e->x(), e->y() );
+  identify( mLastPoint );
+}
+
+void QgsMapToolIdentify::identify( QgsPoint point )
+{
   results()->clear();
+  if ( !mCanvas || mCanvas->isDrawing() )
+  {
+    return;
+  }
 
   QSettings settings;
   int identifyMode = settings.value( "/Map/identifyMode", 0 ).toInt();
@@ -103,7 +117,7 @@ void QgsMapToolIdentify::canvasReleaseEvent( QMouseEvent *e )
 
     QApplication::setOverrideCursor( Qt::WaitCursor );
 
-    res = identifyLayer( layer, e->x(), e->y() );
+    res = identifyLayer( layer, point );
 
     QApplication::restoreOverrideCursor();
   }
@@ -126,7 +140,7 @@ void QgsMapToolIdentify::canvasReleaseEvent( QMouseEvent *e )
       if ( noIdentifyLayerIdList.contains( layer->id() ) )
         continue;
 
-      if ( identifyLayer( layer, e->x(), e->y() ) )
+      if ( identifyLayer( layer, point ) )
       {
         res = true;
         if ( identifyMode == 1 )
@@ -175,24 +189,26 @@ void QgsMapToolIdentify::deactivate()
   QgsMapTool::deactivate();
 }
 
-bool QgsMapToolIdentify::identifyLayer( QgsMapLayer *layer, int x, int y )
+//bool QgsMapToolIdentify::identifyLayer( QgsMapLayer *layer, int x, int y )
+bool QgsMapToolIdentify::identifyLayer( QgsMapLayer *layer, QgsPoint point )
 {
   bool res = false;
 
   if ( layer->type() == QgsMapLayer::RasterLayer )
   {
-    res = identifyRasterLayer( qobject_cast<QgsRasterLayer *>( layer ), x, y );
+    res = identifyRasterLayer( qobject_cast<QgsRasterLayer *>( layer ), point );
   }
   else
   {
-    res = identifyVectorLayer( qobject_cast<QgsVectorLayer *>( layer ), x, y );
+    res = identifyVectorLayer( qobject_cast<QgsVectorLayer *>( layer ), point );
   }
 
   return res;
 }
 
 
-bool QgsMapToolIdentify::identifyVectorLayer( QgsVectorLayer *layer, int x, int y )
+//bool QgsMapToolIdentify::identifyVectorLayer( QgsVectorLayer *layer, int x, int y )
+bool QgsMapToolIdentify::identifyVectorLayer( QgsVectorLayer *layer, QgsPoint point )
 {
   if ( !layer )
     return false;
@@ -207,7 +223,7 @@ bool QgsMapToolIdentify::identifyVectorLayer( QgsVectorLayer *layer, int x, int 
 
   QMap< QString, QString > derivedAttributes;
 
-  QgsPoint point = mCanvas->getCoordinateTransform()->toMapCoordinates( x, y );
+  //QgsPoint point = mCanvas->getCoordinateTransform()->toMapCoordinates( x, y );
 
   derivedAttributes.insert( tr( "(clicked coordinate)" ), point.toString() );
 
@@ -346,7 +362,7 @@ bool QgsMapToolIdentify::identifyVectorLayer( QgsVectorLayer *layer, int x, int 
   return featureCount > 0;
 }
 
-bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, int x, int y )
+bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint point )
 {
   bool res = true;
 
@@ -359,10 +375,10 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, int x, int 
     return false;
   }
 
-  QgsPoint idPoint = mCanvas->getCoordinateTransform()->toMapCoordinates( x, y );
+  //QgsPoint idPoint = mCanvas->getCoordinateTransform()->toMapCoordinates( x, y );
   try
   {
-    idPoint = toLayerCoordinates( layer, idPoint );
+    point = toLayerCoordinates( layer, point );
   }
   catch ( QgsCsException &cse )
   {
@@ -370,9 +386,9 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, int x, int 
     QgsDebugMsg( QString( "coordinate not reprojectable: %1" ).arg( cse.what() ) );
     return false;
   }
-  QgsDebugMsg( QString( "idPoint = %1 %2" ).arg( idPoint.x() ).arg( idPoint.y() ) );
+  QgsDebugMsg( QString( "idPoint = %1 %2" ).arg( point.x() ).arg( point.y() ) );
 
-  if ( !layer->extent().contains( idPoint ) ) return false;
+  if ( !layer->extent().contains( point ) ) return false;
 
   QgsRectangle viewExtent = mCanvas->extent();
 
@@ -398,7 +414,7 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, int x, int 
   {
     viewExtent = toLayerCoordinates( layer, viewExtent );
     //attributes = dprovider->identify( idPoint );
-    values = dprovider->identify( idPoint, format );
+    values = dprovider->identify( point, format );
   }
   else
   {
@@ -423,7 +439,7 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, int x, int 
     QgsDebugMsg( QString( "xRes = %1 yRes = %2 mapUnitsPerPixel = %3" ).arg( viewExtent.width() / width ).arg( viewExtent.height() / height ).arg( mapUnitsPerPixel ) );
 
     //attributes = dprovider->identify( idPoint, viewExtent, width, height );
-    values = dprovider->identify( idPoint, format, viewExtent, width, height );
+    values = dprovider->identify( point, format, viewExtent, width, height );
   }
 
   if ( format == QgsRasterDataProvider::IdentifyFormatValue )
@@ -470,7 +486,7 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, int x, int 
 
   if ( attributes.size() > 0 )
   {
-    derivedAttributes.insert( tr( "(clicked coordinate)" ), idPoint.toString() );
+    derivedAttributes.insert( tr( "(clicked coordinate)" ), point.toString() );
     results()->addFeature( layer, type, attributes, derivedAttributes );
   }
 
@@ -492,4 +508,13 @@ void QgsMapToolIdentify::convertMeasurement( QgsDistanceArea &calc, double &meas
 
   calc.convertMeasurement( measure, myUnits, displayUnits, isArea );
   u = myUnits;
+}
+
+void QgsMapToolIdentify::formatChanged( QgsRasterLayer *layer )
+{
+  // TODO?: this is not perfect, it calls identify with last point, but other
+  // things could also change
+  QgsDebugMsg( "Entered" );
+  //identify( mLastPoint );
+  identifyRasterLayer( layer, mLastPoint );
 }

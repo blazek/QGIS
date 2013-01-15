@@ -519,6 +519,23 @@ QString QgsRasterDataProvider::identifyFormatName( IdentifyFormat format )
   }
 }
 
+QString QgsRasterDataProvider::identifyFormatLabel( IdentifyFormat format )
+{
+  switch ( format )
+  {
+    case IdentifyFormatValue:
+      return tr( "Value" );
+    case IdentifyFormatText:
+      return ( "Text" );
+    case IdentifyFormatHtml:
+      return tr( "Html" );
+    case IdentifyFormatFeature:
+      return tr( "Feature" );
+    default:
+      return "Undefined";
+  }
+}
+
 QgsRasterDataProvider::IdentifyFormat QgsRasterDataProvider::identifyFormatFromName( QString formatName )
 {
   if ( formatName == "Value" ) return IdentifyFormatValue;

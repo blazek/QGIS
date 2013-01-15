@@ -75,6 +75,9 @@ class QgsIdentifyResults: public QDialog, private Ui::QgsIdentifyResultsBase
   signals:
     void selectedFeatureChanged( QgsVectorLayer *, QgsFeatureId featureId );
 
+    // Emited when raster identify format of a layer changed
+    void formatChanged( QgsRasterLayer *layer );
+
   public slots:
     /** Remove results */
     void clear();
@@ -118,6 +121,8 @@ class QgsIdentifyResults: public QDialog, private Ui::QgsIdentifyResultsBase
 
     void on_mExpandToolButton_clicked( bool checked ) { Q_UNUSED( checked ); expandAll(); }
     void on_mCollapseToolButton_clicked( bool checked ) { Q_UNUSED( checked ); collapseAll(); }
+
+    void formatChanged( int index );
 
     void openUrl( const QUrl &url );
     void printCurrentItem();
