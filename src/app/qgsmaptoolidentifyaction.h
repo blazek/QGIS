@@ -69,9 +69,9 @@ class QgsMapToolIdentifyAction : public QgsMapToolIdentify
     void identifyMessage( QString );
 
   private:
-    void identify( QgsPoint point );
-    bool identifyLayer( QgsMapLayer *layer, QgsPoint point );
-    bool identifyRasterLayer( QgsRasterLayer *layer, QgsPoint point );
+    void identify( QgsPoint point,  QgsRectangle viewExtent, double mapUnitsPerPixel );
+    bool identifyLayer( QgsMapLayer *layer, QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel );
+    bool identifyRasterLayer( QgsRasterLayer *layer, QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel );
     bool identifyVectorLayer( QgsVectorLayer *layer, QgsPoint point );
 
     //! Pointer to the identify results dialog for name/value pairs

@@ -148,8 +148,12 @@ class GUI_EXPORT QgsMapToolIdentify : public QgsMapTool
     @param layerType Only performs identification in a certain type of layers (raster, vector).
     @return true if identification succeeded and a feature has been found, false otherwise.*/
     bool identify(int x, int y, IdentifyMode mode,  QList<QgsMapLayer*> layerList, LayerType layerType = AllLayers);
-    bool identifyLayer( QgsMapLayer *layer, int x, int y, LayerType layerType = AllLayers );
-    bool identifyRasterLayer( QgsRasterLayer *layer, QgsPoint point );
+
+    bool identify( QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel, IdentifyMode mode,  QList<QgsMapLayer*> layerList, LayerType layerType = AllLayers);
+
+    //bool identifyLayer( QgsMapLayer *layer, int x, int y, LayerType layerType = AllLayers );
+    bool identifyLayer( QgsMapLayer *layer, QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel, LayerType layerType = AllLayers );
+    bool identifyRasterLayer( QgsRasterLayer *layer, QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel );
     bool identifyVectorLayer( QgsVectorLayer *layer, QgsPoint point );
 
     //! Private helper
@@ -162,6 +166,10 @@ class GUI_EXPORT QgsMapToolIdentify : public QgsMapTool
 
     // Last point in canvas CRS
     QgsPoint mLastPoint;
+
+    double mLastMapUnitsPerPixel;
+
+    QgsRectangle mLastExtent;
 };
 
 #endif
