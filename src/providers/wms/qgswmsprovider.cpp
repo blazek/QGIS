@@ -4002,10 +4002,17 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
       {
         QgsFeature * f = features.value( id );
         QgsDebugMsg( QString( "feature id = %1" ).arg( id ) );
-        foreach ( int i, f->attributeMap().keys() )
+        const QgsAttributes& attrs = f->attributes();
+        // TODO: take fields form QgsFeatureStore 
+        //const QgsFields fields = 
+        //foreach ( int i, f->attributeMap().keys() )
+        for ( int i = 0; i < attrs.count(); ++i )
         {
-          QgsDebugMsg( QString( "  %1 : %2" ).arg( i ).arg( f->attributeMap().value( i ).toString() ) );
-          QString s = QString( "%1 : %2" ).arg( fields.value( i ).name() ).arg( f->attributeMap().value( i ).toString() );
+          //if ( i >= fields.count() ) continue;
+
+          QgsDebugMsg( QString( "  %1 : %2" ).arg( i ).arg( attrs[i].toString() ) );
+          // TODO attr name from fields
+          QString s = QString( "%1 : %2" ).arg( i ).arg( attrs[i].toString() );
           result += s + "\n";
         }
       }

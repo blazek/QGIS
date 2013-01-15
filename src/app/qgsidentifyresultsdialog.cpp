@@ -47,6 +47,7 @@
 #include <QPrintDialog>
 #include <QDesktopServices>
 #include <QMessageBox>
+#include <QComboBox>
 
 QgsWebView::QgsWebView( QWidget *parent ) : QWebView( parent )
 {
@@ -141,6 +142,12 @@ QgsIdentifyResultsDialog::QgsIdentifyResultsDialog( QgsMapCanvas *canvas, QWidge
   lstResults->setColumnCount( 2 );
   setColumnText( 0, tr( "Feature" ) );
   setColumnText( 1, tr( "Value" ) );
+
+  int width = mySettings.value( "/Windows/Identify/columnWidth", "0" ).toInt();
+  if ( width > 0 )
+  {
+    lstResults->setColumnWidth( 0, width );
+  }
 
   connect( buttonBox, SIGNAL( rejected() ), this, SLOT( close() ) );
 
@@ -303,6 +310,40 @@ void QgsIdentifyResultsDialog::addFeature( QgsRasterLayer *layer,
     layItem->setData( 0, Qt::UserRole, QVariant::fromValue( qobject_cast<QObject *>( layer ) ) );
     lstResults->addTopLevelItem( layItem );
 
+    // Add format combo box item
+    QTreeWidgetItem *formatItem = new QTreeWidgetItem( QStringList() << tr( "Format" ) );
+    layItem->addChild( formatItem );
+    QComboBox *formatCombo = new QComboBox();
+
+    // Add all supported formats, best first. Note that all providers should support
+    // IdentifyFormatHtml and IdentifyFormatText because other formats may be
+    // converted to them
+    int capabilities = layer->dataProvider()->capabilities();
+    QList<QgsRasterDataProvider::IdentifyFormat> formats;
+    formats << QgsRasterDataProvider::IdentifyFormatFeature
+    << QgsRasterDataProvider::IdentifyFormatValue
+    << QgsRasterDataProvider::IdentifyFormatHtml
+    << QgsRasterDataProvider::IdentifyFormatText;
+    QgsRasterDataProvider::IdentifyFormat currentFormat = QgsRasterDataProvider::identifyFormatFromName( layer->customProperty( "identify/format" ).toString() );
+    foreach ( QgsRasterDataProvider::IdentifyFormat f, formats )
+    {
+      if ( !( QgsRasterDataProvider::identifyFormatToCapability( f ) & capabilities ) ) continue;
+      formatCombo->addItem( QgsRasterDataProvider::identifyFormatLabel( f ), f );
+      formatCombo->setItemData( formatCombo->count() - 1, qVariantFromValue(( void * )layer ), Qt::UserRole + 1 );
+      if ( currentFormat == f ) formatCombo->setCurrentIndex( formatCombo->count() - 1 );
+    }
+
+    if ( formatCombo->count() > 1 )
+    {
+      lstResults->setItemWidget( formatItem, 1, formatCombo );
+      connect( formatCombo, SIGNAL( currentIndexChanged( int ) ),
+               this, SLOT( formatChanged( int ) ) );
+    }
+    else
+    {
+      delete formatCombo;
+    }
+
     connect( layer, SIGNAL( destroyed() ), this, SLOT( layerDestroyed() ) );
     connect( layer, SIGNAL( layerCrsChanged() ), this, SLOT( layerDestroyed() ) );
   }
@@ -384,7 +425,8 @@ void QgsIdentifyResultsDialog::show()
 {
   // Enforce a few things before showing the dialog box
   lstResults->sortItems( 0, Qt::AscendingOrder );
-  expandColumnsToFit();
+  // column width is now stored in settings
+  //expandColumnsToFit();
 
   if ( lstResults->topLevelItemCount() > 0 )
   {
@@ -539,6 +581,8 @@ void QgsIdentifyResultsDialog::saveWindowLocation()
 {
   QSettings settings;
   settings.setValue( "/Windows/Identify/geometry", saveGeometry() );
+  // first column width
+  settings.setValue( "/Windows/Identify/columnWidth", lstResults->columnWidth( 0 ) );
 }
 
 void QgsIdentifyResultsDialog::setColumnText( int column, const QString & label )
@@ -717,7 +761,8 @@ QTreeWidgetItem *QgsIdentifyResultsDialog::retrieveAttributes( QTreeWidgetItem *
 void QgsIdentifyResultsDialog::itemExpanded( QTreeWidgetItem *item )
 {
   Q_UNUSED( item );
-  expandColumnsToFit();
+  // column width is now stored in settings
+  //expandColumnsToFit();
 }
 
 void QgsIdentifyResultsDialog::handleCurrentItemChanged( QTreeWidgetItem *current, QTreeWidgetItem *previous )
@@ -1078,8 +1123,51 @@ void QgsIdentifyResultsDialog::printCurrentItem()
     wv->print( &printer );
 }
 
-void QgsIdentifyResultsDialog:: on_mExpandNewToolButton_toggled( bool checked )
+void QgsIdentifyResultsDialog::on_mExpandNewToolButton_toggled( bool checked )
 {
   QSettings settings;
   settings.setValue( "/Map/identifyExpand", checked );
+}
+
+void QgsIdentifyResultsDialog::formatChanged( int index )
+{
+  QgsDebugMsg( "Entered" );
+  QComboBox *combo = qobject_cast<QComboBox*>( sender() );
+  if ( !combo )
+  {
+    QgsDebugMsg( "sender is not QComboBox" );
+    return;
+  }
+  QgsRasterDataProvider::IdentifyFormat format = ( QgsRasterDataProvider::IdentifyFormat ) combo->itemData( index, Qt::UserRole ).toInt();
+  QgsDebugMsg( QString( "format = %1" ).arg( format ) );
+  QgsRasterLayer *layer = ( QgsRasterLayer * )combo->itemData( index, Qt::UserRole + 1 ).value<void *>();
+  if ( !layer )
+  {
+    QgsDebugMsg( "cannot get raster layer" );
+    return;
+  }
+  // Store selected identify format in layer
+  layer->setCustomProperty( "identify/format", QgsRasterDataProvider::identifyFormatName( format ) );
+
+  // remove all childs of that layer from results, except the first (format)
+  QTreeWidgetItem *layItem = layerItem(( QObject * )layer );
+  for ( int i = layItem->childCount() - 1; i > 0; i-- )
+  {
+    layItem->removeChild( layItem->child( i ) );
+  }
+
+  // let know QgsMapToolIdentify that format changed
+  emit formatChanged( layer );
+
+  // Expand
+  layItem->setExpanded( true );
+  for ( int i = 1; i < layItem->childCount(); i++ )
+  {
+    QTreeWidgetItem *subItem = layItem->child( i );
+    subItem->setExpanded( true );
+    for ( int j = 0; j < subItem->childCount(); j++ )
+    {
+      subItem->child( j )->setExpanded( true );
+    }
+  }
 }

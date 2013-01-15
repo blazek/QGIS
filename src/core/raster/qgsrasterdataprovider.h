@@ -465,6 +465,7 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
 
     static QString identifyFormatName( IdentifyFormat format );
     static IdentifyFormat identifyFormatFromName( QString formatName );
+    static QString identifyFormatLabel( IdentifyFormat format );
     static Capability identifyFormatToCapability( IdentifyFormat format );
 
   signals:

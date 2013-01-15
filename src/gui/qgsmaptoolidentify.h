@@ -130,6 +130,9 @@ class GUI_EXPORT QgsMapToolIdentify : public QgsMapTool
     /** Access to results */
     IdentifyResults &results();
 
+  public slots:
+    void formatChanged( QgsRasterLayer *layer );
+
   signals:
     void identifyProgress( int, int );
     void identifyMessage( QString );
@@ -146,8 +149,8 @@ class GUI_EXPORT QgsMapToolIdentify : public QgsMapTool
     @return true if identification succeeded and a feature has been found, false otherwise.*/
     bool identify(int x, int y, IdentifyMode mode,  QList<QgsMapLayer*> layerList, LayerType layerType = AllLayers);
     bool identifyLayer( QgsMapLayer *layer, int x, int y, LayerType layerType = AllLayers );
-    bool identifyRasterLayer( QgsRasterLayer *layer, int x, int y );
-    bool identifyVectorLayer( QgsVectorLayer *layer, int x, int y );
+    bool identifyRasterLayer( QgsRasterLayer *layer, QgsPoint point );
+    bool identifyVectorLayer( QgsVectorLayer *layer, QgsPoint point );
 
     //! Private helper
     virtual void convertMeasurement( QgsDistanceArea &calc, double &measure, QGis::UnitType &u, bool isArea );
@@ -156,6 +159,9 @@ class GUI_EXPORT QgsMapToolIdentify : public QgsMapTool
     virtual QGis::UnitType displayUnits();
 
     IdentifyResults mResultData;
+
+    // Last point in canvas CRS
+    QgsPoint mLastPoint;
 };
 
 #endif
