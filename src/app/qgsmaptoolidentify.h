@@ -69,9 +69,9 @@ class QgsMapToolIdentify : public QgsMapTool
     void identifyMessage( QString );
 
   private:
-    void identify( QgsPoint point );
-    bool identifyLayer( QgsMapLayer *layer, QgsPoint point );
-    bool identifyRasterLayer( QgsRasterLayer *layer, QgsPoint point );
+    void identify( QgsPoint point,  QgsRectangle viewExtent, double mapUnitsPerPixel );
+    bool identifyLayer( QgsMapLayer *layer, QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel );
+    bool identifyRasterLayer( QgsRasterLayer *layer, QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel );
     bool identifyVectorLayer( QgsVectorLayer *layer, QgsPoint point );
 
     //! Pointer to the identify results dialog for name/value pairs
@@ -89,6 +89,10 @@ class QgsMapToolIdentify : public QgsMapTool
 
     // Last point in canvas CRS
     QgsPoint mLastPoint;
+
+    double mLastMapUnitsPerPixel;
+
+    QgsRectangle mLastExtent;
 };
 
 #endif

@@ -87,10 +87,12 @@ void QgsMapToolIdentify::canvasReleaseEvent( QMouseEvent *e )
   }
 
   mLastPoint = mCanvas->getCoordinateTransform()->toMapCoordinates( e->x(), e->y() );
-  identify( mLastPoint );
+  mLastExtent = mCanvas->extent();
+  mLastMapUnitsPerPixel = mCanvas->mapUnitsPerPixel();
+  identify( mLastPoint, mLastExtent, mLastMapUnitsPerPixel );
 }
 
-void QgsMapToolIdentify::identify( QgsPoint point )
+void QgsMapToolIdentify::identify( QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel )
 {
   results()->clear();
   if ( !mCanvas || mCanvas->isDrawing() )
@@ -117,7 +119,7 @@ void QgsMapToolIdentify::identify( QgsPoint point )
 
     QApplication::setOverrideCursor( Qt::WaitCursor );
 
-    res = identifyLayer( layer, point );
+    res = identifyLayer( layer, point, viewExtent, mapUnitsPerPixel );
 
     QApplication::restoreOverrideCursor();
   }
@@ -140,7 +142,7 @@ void QgsMapToolIdentify::identify( QgsPoint point )
       if ( noIdentifyLayerIdList.contains( layer->id() ) )
         continue;
 
-      if ( identifyLayer( layer, point ) )
+      if ( identifyLayer( layer, point, viewExtent, mapUnitsPerPixel ) )
       {
         res = true;
         if ( identifyMode == 1 )
@@ -189,14 +191,13 @@ void QgsMapToolIdentify::deactivate()
   QgsMapTool::deactivate();
 }
 
-//bool QgsMapToolIdentify::identifyLayer( QgsMapLayer *layer, int x, int y )
-bool QgsMapToolIdentify::identifyLayer( QgsMapLayer *layer, QgsPoint point )
+bool QgsMapToolIdentify::identifyLayer( QgsMapLayer *layer, QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel )
 {
   bool res = false;
 
   if ( layer->type() == QgsMapLayer::RasterLayer )
   {
-    res = identifyRasterLayer( qobject_cast<QgsRasterLayer *>( layer ), point );
+    res = identifyRasterLayer( qobject_cast<QgsRasterLayer *>( layer ), point, viewExtent, mapUnitsPerPixel );
   }
   else
   {
@@ -206,8 +207,6 @@ bool QgsMapToolIdentify::identifyLayer( QgsMapLayer *layer, QgsPoint point )
   return res;
 }
 
-
-//bool QgsMapToolIdentify::identifyVectorLayer( QgsVectorLayer *layer, int x, int y )
 bool QgsMapToolIdentify::identifyVectorLayer( QgsVectorLayer *layer, QgsPoint point )
 {
   if ( !layer )
@@ -222,8 +221,6 @@ bool QgsMapToolIdentify::identifyVectorLayer( QgsVectorLayer *layer, QgsPoint po
   }
 
   QMap< QString, QString > derivedAttributes;
-
-  //QgsPoint point = mCanvas->getCoordinateTransform()->toMapCoordinates( x, y );
 
   derivedAttributes.insert( tr( "(clicked coordinate)" ), point.toString() );
 
@@ -362,7 +359,7 @@ bool QgsMapToolIdentify::identifyVectorLayer( QgsVectorLayer *layer, QgsPoint po
   return featureCount > 0;
 }
 
-bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint point )
+bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel )
 {
   bool res = true;
 
@@ -375,7 +372,6 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
     return false;
   }
 
-  //QgsPoint idPoint = mCanvas->getCoordinateTransform()->toMapCoordinates( x, y );
   try
   {
     point = toLayerCoordinates( layer, point );
@@ -386,11 +382,9 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
     QgsDebugMsg( QString( "coordinate not reprojectable: %1" ).arg( cse.what() ) );
     return false;
   }
-  QgsDebugMsg( QString( "idPoint = %1 %2" ).arg( point.x() ).arg( point.y() ) );
+  QgsDebugMsg( QString( "point = %1 %2" ).arg( point.x() ).arg( point.y() ) );
 
   if ( !layer->extent().contains( point ) ) return false;
-
-  QgsRectangle viewExtent = mCanvas->extent();
 
   QMap< QString, QString > attributes, derivedAttributes;
 
@@ -413,7 +407,6 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
   if ( mCanvas->hasCrsTransformEnabled() && dprovider->crs() != mCanvas->mapRenderer()->destinationCrs() )
   {
     viewExtent = toLayerCoordinates( layer, viewExtent );
-    //attributes = dprovider->identify( idPoint );
     values = dprovider->identify( point, format );
   }
   else
@@ -426,7 +419,6 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
     // and thus shifted point calculated back in QGIS WMS (using average resolution)
     //viewExtent = dprovider->extent().intersect( &viewExtent );
 
-    double mapUnitsPerPixel = mCanvas->mapUnitsPerPixel();
     // Width and height are calculated from not projected extent and we hope that
     // are similar to source width and height used to reproject layer for drawing.
     // TODO: may be very dangerous, because it may result in different resolutions
@@ -438,7 +430,6 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
     QgsDebugMsg( QString( "width = %1 height = %2" ).arg( width ).arg( height ) );
     QgsDebugMsg( QString( "xRes = %1 yRes = %2 mapUnitsPerPixel = %3" ).arg( viewExtent.width() / width ).arg( viewExtent.height() / height ).arg( mapUnitsPerPixel ) );
 
-    //attributes = dprovider->identify( idPoint, viewExtent, width, height );
     values = dprovider->identify( point, format, viewExtent, width, height );
   }
 
@@ -516,5 +507,5 @@ void QgsMapToolIdentify::formatChanged( QgsRasterLayer *layer )
   // things could also change
   QgsDebugMsg( "Entered" );
   //identify( mLastPoint );
-  identifyRasterLayer( layer, mLastPoint );
+  identifyRasterLayer( layer, mLastPoint, mLastExtent, mLastMapUnitsPerPixel );
 }
