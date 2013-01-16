@@ -430,6 +430,8 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
     values = dprovider->identify( point, format, viewExtent, width, height );
   }
 
+  QString type = tr( "Raster" );
+  QgsGeometry geometry;
   if ( format == QgsRasterDataProvider::IdentifyFormatValue )
   {
     foreach ( int bandNo, values.keys() )
@@ -449,10 +451,29 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
   }
   else if ( format == QgsRasterDataProvider::IdentifyFormatFeature )
   {
+    derivedAttributes.insert( tr( "(clicked coordinate)" ), point.toString() );
     foreach ( int i, values.keys() )
     {
-      attributes.insert( values.value( i ).toString(), "" );
+      QgsRasterFeatureList features = values.value( i ).value<QgsRasterFeatureList>();
+
+      foreach ( QgsRasterFeature feature, features )
+      {
+        // TODO
+        QgsDebugMsg("TODO");
+        /*
+        attributes.clear();
+        
+        foreach ( int k, feature.attributeMap().keys() )
+        {
+          QgsDebugMsg( QString( "%1 : %2" ).arg( feature.fields().value( k ).name() ).arg( feature.attributeMap().value( k ).toString() ) );
+          attributes.insert( feature.fields().value( k ).name(), feature.attributeMap().value( k ).toString() );
+        }
+        results()->addFeature( layer, type, attributes, derivedAttributes, *feature.geometry() );
+        */
+        //mResultData.mRasterResults.append( RasterResult(layer, *f_it, derivedAttributes));
+      }
     }
+    return true;
   }
   else // text or html
   {
@@ -469,14 +490,12 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
     }
   }
 
-  QString type;
-  type = tr( "Raster" );
-
   if ( attributes.size() > 0 )
   {
     derivedAttributes.insert( tr( "(clicked coordinate)" ), point.toString() );
+    // TODO: add geometry
+    //results()->addFeature( layer, type, attributes, derivedAttributes, geometry );
     mResultData.mRasterResults.append( RasterResult(layer, type, attributes, derivedAttributes));
-    //results()->addFeature( layer, type, attributes, derivedAttributes );
   }
 
   return res;

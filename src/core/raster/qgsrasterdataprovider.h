@@ -26,6 +26,8 @@
 #include "qgsrectangle.h"
 #include "qgsdataprovider.h"
 #include "qgserror.h"
+#include "qgsfeature.h"
+#include "qgsfield.h"
 #include "qgsrasterinterface.h"
 #include "qgscolorrampshader.h"
 #include "qgsrasterpyramid.h"
@@ -43,6 +45,41 @@ class QByteArray;
 
 #define TINY_VALUE  std::numeric_limits<double>::epsilon() * 20
 #define RASTER_HISTOGRAM_BINS 256
+
+
+/** \ingroup core
+ * Class representing vector feature including fields and layer description.
+ * Used as identify result by WMS provider.
+*/
+class CORE_EXPORT QgsRasterFeature : public QgsFeature
+{
+    //Q_OBJECT
+
+  public:
+    //! Constructor
+    QgsRasterFeature( );
+
+    //! Constructor
+    QgsRasterFeature( const QgsFeature & feature, const QgsFieldMap & fields );
+
+    //! Copy constructor
+    //QgsRasterFeature( const QgsFeature & rhs );
+
+    //! Destructor
+    ~QgsRasterFeature();
+
+    const QgsFieldMap & fields() const { return mFields; }
+
+    void setFields( const QgsFieldMap & fields ) { mFields = fields; }
+
+  private:
+    QgsFieldMap mFields;
+};
+
+typedef QList<QgsRasterFeature> QgsRasterFeatureList;
+
+Q_DECLARE_METATYPE( QgsRasterFeature );
+Q_DECLARE_METATYPE( QgsRasterFeatureList );
 
 /** \ingroup core
  * Base class for raster data providers.
@@ -335,8 +372,12 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
      * @param theExtent context extent
      * @param theWidth context width
      * @param theHeight context height
-     * @return map of values for all bands, keys are band numbers (from 1), empty
-     *         if failed
+     * @return IdentifyFormatValue: map of values for each band, keys are band numbers
+     *         (from 1).
+     *         IdentifyFormatFeature: map of QgsRasterFeatureList for each sublayer
+     *         (WMS) - TODO: it is not consistent with IdentifyFormatValue.
+     *         IdentifyFormatHtml: map of HTML strings for each sublayer (WMS).
+     *         Empty if failed or there are no results (TODO: better error reporting).
      */
     virtual QMap<int, QVariant> identify( const QgsPoint & thePoint, IdentifyFormat theFormat, const QgsRectangle &theExtent = QgsRectangle(), int theWidth = 0, int theHeight = 0 );
 

@@ -62,7 +62,8 @@ class QgsIdentifyResultsDialog: public QDialog, private Ui::QgsIdentifyResultsBa
     /** Add add feature from other layer */
     void addFeature( QgsRasterLayer *layer, QString label,
                      const QMap< QString, QString > &attributes,
-                     const QMap< QString, QString > &derivedAttributes );
+                     const QMap< QString, QString > &derivedAttributes,
+                     const QgsGeometry geometry );
 
     /** map tool was deactivated */
     void deactivate();
@@ -134,6 +135,7 @@ class QgsIdentifyResultsDialog: public QDialog, private Ui::QgsIdentifyResultsBa
     QList<QgsFeature> mFeatures;
 
     QgsVectorLayer *vectorLayer( QTreeWidgetItem *item );
+    QgsRasterLayer *rasterLayer( QTreeWidgetItem *item );
     QTreeWidgetItem *featureItem( QTreeWidgetItem *item );
     QTreeWidgetItem *layerItem( QTreeWidgetItem *item );
     QTreeWidgetItem *layerItem( QObject *layer );

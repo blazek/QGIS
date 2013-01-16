@@ -300,9 +300,12 @@ void QgsIdentifyResultsDialog::addFeature( QgsVectorLayer *vlayer,
 void QgsIdentifyResultsDialog::addFeature( QgsRasterLayer *layer,
                                      QString label,
                                      const QMap<QString, QString> &attributes,
-                                     const QMap<QString, QString> &derivedAttributes )
+                                     const QMap<QString, QString> &derivedAttributes,
+                                     const QgsGeometry geometry )
 {
   QTreeWidgetItem *layItem = layerItem( layer );
+
+  QgsRasterDataProvider::IdentifyFormat currentFormat = QgsRasterDataProvider::identifyFormatFromName( layer->customProperty( "identify/format" ).toString() );
 
   if ( layItem == 0 )
   {
@@ -324,7 +327,6 @@ void QgsIdentifyResultsDialog::addFeature( QgsRasterLayer *layer,
     << QgsRasterDataProvider::IdentifyFormatValue
     << QgsRasterDataProvider::IdentifyFormatHtml
     << QgsRasterDataProvider::IdentifyFormatText;
-    QgsRasterDataProvider::IdentifyFormat currentFormat = QgsRasterDataProvider::identifyFormatFromName( layer->customProperty( "identify/format" ).toString() );
     foreach ( QgsRasterDataProvider::IdentifyFormat f, formats )
     {
       if ( !( QgsRasterDataProvider::identifyFormatToCapability( f ) & capabilities ) ) continue;
@@ -350,9 +352,12 @@ void QgsIdentifyResultsDialog::addFeature( QgsRasterLayer *layer,
 
   QTreeWidgetItem *featItem = new QTreeWidgetItem( QStringList() << label << "" );
   featItem->setData( 0, Qt::UserRole, -1 );
+  featItem->setData( 0, Qt::UserRole + 1, qVariantFromValue( geometry ) );
   layItem->addChild( featItem );
 
-  if ( layer && layer->providerType() == "wms" )
+  // TODO: better
+  //if ( layer && layer->providerType() == "wms" )
+  if ( layer && layer->providerType() == "wms" && currentFormat == QgsRasterDataProvider::IdentifyFormatHtml )
   {
     QTreeWidgetItem *attrItem = new QTreeWidgetItem( QStringList() << attributes.begin().key() << "" );
     featItem->addChild( attrItem );
@@ -735,6 +740,13 @@ QgsVectorLayer *QgsIdentifyResultsDialog::vectorLayer( QTreeWidgetItem *item )
   return qobject_cast<QgsVectorLayer *>( item->data( 0, Qt::UserRole ).value<QObject *>() );
 }
 
+QgsRasterLayer *QgsIdentifyResultsDialog::rasterLayer( QTreeWidgetItem *item )
+{
+  item = layerItem( item );
+  if ( !item )
+    return NULL;
+  return qobject_cast<QgsRasterLayer *>( item->data( 0, Qt::UserRole ).value<QObject *>() );
+}
 
 QTreeWidgetItem *QgsIdentifyResultsDialog::retrieveAttributes( QTreeWidgetItem *item, QgsAttributeMap &attributes, int &idx )
 {
@@ -903,7 +915,8 @@ void QgsIdentifyResultsDialog::attributeValueChanged( QgsFeatureId fid, int idx,
 void QgsIdentifyResultsDialog::highlightFeature( QTreeWidgetItem *item )
 {
   QgsVectorLayer *layer = vectorLayer( item );
-  if ( !layer )
+  QgsRasterLayer *rlayer = rasterLayer( item );
+  if ( !layer && !rlayer )
     return;
 
   QTreeWidgetItem *featItem = featureItem( item );
@@ -913,20 +926,33 @@ void QgsIdentifyResultsDialog::highlightFeature( QTreeWidgetItem *item )
   if ( mHighlights.contains( featItem ) )
     return;
 
-  QgsFeatureId fid = STRING_TO_FID( featItem->data( 0, Qt::UserRole ) );
-
-  QgsFeature feat;
-  if ( !layer->getFeatures( QgsFeatureRequest().setFilterFid( fid ).setSubsetOfAttributes( QgsAttributeList() ) ).nextFeature( feat ) )
+  QgsGeometry geometry;
+  if ( layer )
   {
-    return;
+    QgsFeatureId fid = STRING_TO_FID( featItem->data( 0, Qt::UserRole ) );
+
+    QgsFeature feat;
+    //if ( !layer->featureAtId( fid, feat, true, false ) )
+    if ( !layer->getFeatures( QgsFeatureRequest().setFilterFid( fid ).setSubsetOfAttributes( QgsAttributeList() ) ).nextFeature( feat ) )
+    {
+      return;
+    }
+
+    if ( !feat.geometry() )
+    {
+      return;
+    }
+
+    geometry = QgsGeometry( *feat.geometry() );
+  }
+  else // raster
+  {
+    geometry = featItem->data( 0, Qt::UserRole + 1 ).value<QgsGeometry>();
+    QgsDebugMsg( QString( "geometry.wkbType() = %1" ).arg( geometry.wkbType() ) );
+    if ( geometry.wkbType() == QGis::WKBUnknown ) return;
   }
 
-  if ( !feat.geometry() )
-  {
-    return;
-  }
-
-  QgsHighlight *h = new QgsHighlight( mCanvas, feat.geometry(), layer );
+  QgsHighlight *h = new QgsHighlight( mCanvas, &geometry, layer );
   if ( h )
   {
     h->setWidth( 2 );

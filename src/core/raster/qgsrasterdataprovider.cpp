@@ -27,6 +27,20 @@
 
 #include <qmath.h>
 
+QgsRasterFeature::QgsRasterFeature()
+{
+}
+
+QgsRasterFeature::QgsRasterFeature( const QgsFeature & feature, const QgsFieldMap & fields )
+    : QgsFeature( feature )
+    , mFields( fields )
+{
+}
+
+QgsRasterFeature::~QgsRasterFeature()
+{
+}
+
 void QgsRasterDataProvider::setUseSrcNoDataValue( int bandNo, bool use )
 {
   if ( mUseSrcNoDataValue.size() < bandNo )

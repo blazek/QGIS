@@ -3916,6 +3916,9 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
                  .arg( myExtent.xMaximum(), 0, 'f', 16 )
                  .arg( myExtent.yMaximum(), 0, 'f', 16 );
 
+  //QgsFeatureList featureList;
+
+  int count = 0;
   // Test for which layers are suitable for querying with
   for ( QStringList::const_iterator
         layers  = mActiveSubLayers.begin(),
@@ -3988,7 +3991,6 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
       QMap<QString, QPair<int, QgsField> > thematicAttributes; // ???
       QGis::WkbType wkbType;
       QString uri;
-      //QString uri = "TYPENAME=cr";
       QgsWFSData dataReader( uri, &extent, features, idMap, geometryAttribute, thematicAttributes, &wkbType );
       // parse XSD
       dataReader.parseXSD( mIdentifyResultXsd.toAscii() );
@@ -3996,28 +3998,20 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
       // TODO: avoid converting to string and back
       int ret = dataReader.getWFSData( mIdentifyResult.toAscii() );
       QgsDebugMsg( QString( "parsing result = %1" ).arg( ret ) );
-      QMap<int, QgsField> fields = dataReader.fields();
-      QString result;
+      QgsFieldMap fields = dataReader.fields();
+
+      QgsRasterFeatureList featureList;
       foreach ( QgsFeatureId id, features.keys() )
       {
-        QgsFeature * f = features.value( id );
+        QgsFeature * feature = features.value( id );
         QgsDebugMsg( QString( "feature id = %1" ).arg( id ) );
-        const QgsAttributes& attrs = f->attributes();
-        // TODO: take fields form QgsFeatureStore 
-        //const QgsFields fields = 
-        //foreach ( int i, f->attributeMap().keys() )
-        for ( int i = 0; i < attrs.count(); ++i )
-        {
-          //if ( i >= fields.count() ) continue;
 
-          QgsDebugMsg( QString( "  %1 : %2" ).arg( i ).arg( attrs[i].toString() ) );
-          // TODO attr name from fields
-          QString s = QString( "%1 : %2" ).arg( i ).arg( attrs[i].toString() );
-          result += s + "\n";
-        }
+        QgsRasterFeature rasterFeature = QgsRasterFeature( *feature, fields );
+        featureList.append( rasterFeature );
       }
-      results.insert( 0, result ) ;
+      results.insert( count, qVariantFromValue( featureList ) );
     }
+    count++;
   }
 
   QString str;
@@ -4031,10 +4025,6 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
   {
     str = resultStrings.join( "\n-------------\n" );
     results.insert( 1, str );
-  }
-  else if ( theFormat == IdentifyFormatFeature ) // GML
-  {
-
   }
 
   return results;

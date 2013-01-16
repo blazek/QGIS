@@ -93,10 +93,17 @@ void QgsMapToolIdentifyAction::canvasReleaseEvent( QMouseEvent *e )
 
     QList<VectorResult>::const_iterator vresult;
     for ( vresult = results().mVectorResults.begin(); vresult != results().mVectorResults.end(); ++vresult)
+    {
         resultsDialog()->addFeature( vresult->mLayer, vresult->mFeature, vresult->mDerivedAttributes);
+    }
     QList<RasterResult>::const_iterator rresult;
     for ( rresult = results().mRasterResults.begin(); rresult != results().mRasterResults.end(); ++rresult)
-        resultsDialog()->addFeature( rresult->mLayer, rresult->mLabel, rresult->mAttributes, rresult->mDerivedAttributes);
+    {
+        QgsDebugMsg("TODO geometry");
+        //resultsDialog()->addFeature( rresult->mLayer, rresult->mLabel, rresult->mAttributes, rresult->mDerivedAttributes);
+        QgsGeometry geom;
+        resultsDialog()->addFeature( rresult->mLayer, rresult->mLabel, rresult->mAttributes, rresult->mDerivedAttributes, geom);
+    }
 
   if ( res )
   {
