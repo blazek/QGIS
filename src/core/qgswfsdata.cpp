@@ -914,15 +914,36 @@ bool QgsWFSData::parseXSD( const QByteArray &xml )
 
   QgsDebugMsg( QString( "%1 elemets read" ).arg( elements.size() ) );
 
+  // Supported geometry types
+  QStringList geometryTypes;
+  geometryTypes << "Point" << "MultiPoint"
+  << "LineString" << "MultiLineString"
+  << "Polygon" << "MultiPolygon";
+
+  for ( int i = 0; i < geometryTypes.size(); i++ )
+  {
+    geometryTypes[i] = "gml:" + geometryTypes.value( i ) + "PropertyType";
+  }
+
   int count = 0;
   foreach ( QDomElement el, elements )
   {
     QString name = el.attribute( "name" );
-    QgsDebugMsg( QString( "name = %1" ).arg( name ) );
+    QString type = el.attribute( "type" );
+    QgsDebugMsg( QString( "name = %1 type = %2" ).arg( name ).arg( type ) );
+
+    // A feature may have more geometries, we take just the first one
+    if ( mGeometryAttribute.isEmpty() && geometryTypes.contains( type ) )
+    {
+      mGeometryAttribute = name;
+      continue;
+    }
+
     QgsField field( name, QVariant::String, "text" );
     mThematicAttributes.insert( name, qMakePair( count, field ) );
     count++;
   }
+  QgsDebugMsg( "mGeometryAttribute = " + mGeometryAttribute );
 
   return true;
 }

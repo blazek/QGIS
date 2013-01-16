@@ -262,4 +262,6 @@ typedef QMap<int, QString> QgsFieldNameMap;
 
 typedef QList<QgsFeature> QgsFeatureList;
 
+Q_DECLARE_METATYPE( QgsFeatureList );
+
 #endif

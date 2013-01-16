@@ -627,4 +627,6 @@ class CORE_EXPORT QgsGeometry
     static int refcount;
 }; // class QgsGeometry
 
+Q_DECLARE_METATYPE( QgsGeometry );
+
 #endif
