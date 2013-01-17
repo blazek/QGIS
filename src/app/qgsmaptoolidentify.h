@@ -20,6 +20,7 @@
 #include "qgsmaptool.h"
 #include "qgspoint.h"
 #include "qgsfeature.h"
+#include "qgsfield.h"
 #include "qgsdistancearea.h"
 
 #include <QObject>
@@ -63,10 +64,12 @@ class QgsMapToolIdentify : public QgsMapTool
 
   public slots:
     void formatChanged( QgsRasterLayer *layer );
+    void handleCopyToClipboard( const QgsFieldMap &fields, const QgsFeatureList &features, const QgsCoordinateReferenceSystem &crs );
 
   signals:
     void identifyProgress( int, int );
     void identifyMessage( QString );
+    void copyToClipboard( const QgsFieldMap &fields, const QgsFeatureList &features, const QgsCoordinateReferenceSystem &crs );
 
   private:
     void identify( QgsPoint point,  QgsRectangle viewExtent, double mapUnitsPerPixel );
@@ -86,6 +89,8 @@ class QgsMapToolIdentify : public QgsMapTool
                      const QMap< QString, QString > &derivedAttributes );
 
     QgsIdentifyResults *results();
+
+    QMap< QString, QString > featureDerivedAttributes( QgsFeature *feature, QgsMapLayer *layer );
 
     // Last point in canvas CRS
     QgsPoint mLastPoint;

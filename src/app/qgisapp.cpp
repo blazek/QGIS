@@ -1852,6 +1852,8 @@ void QgisApp::createCanvasTools()
 #endif
   mMapTools.mIdentify = new QgsMapToolIdentify( mMapCanvas );
   mMapTools.mIdentify->setAction( mActionIdentify );
+  connect( mMapTools.mIdentify, SIGNAL( copyToClipboard( const QgsFieldMap &, const QgsFeatureList &, const QgsCoordinateReferenceSystem & ) ),
+           this, SLOT( copyFeatures( const QgsFieldMap &, const QgsFeatureList &, const QgsCoordinateReferenceSystem & ) ) );
   mMapTools.mFeatureAction = new QgsMapToolFeatureAction( mMapCanvas );
   mMapTools.mFeatureAction->setAction( mActionFeatureAction );
   mMapTools.mMeasureDist = new QgsMeasureTool( mMapCanvas, false /* area */ );
@@ -5073,6 +5075,10 @@ void QgisApp::pasteTransformations()
   pt->exec();
 }
 
+void QgisApp::copyFeatures( const QgsFieldMap &fields, const QgsFeatureList &features, const QgsCoordinateReferenceSystem &crs )
+{
+  clipboard()->replaceWithCopyOf( fields, features, crs );
+}
 
 void QgisApp::refreshMapCanvas()
 {

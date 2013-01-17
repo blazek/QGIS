@@ -66,6 +66,12 @@ class QgsClipboard
     void replaceWithCopyOf( QgsVectorLayer *src );
 
     /*
+     *  Place a copy of features on the internal clipboard,
+     *  destroying the previous contents.
+     */
+    void replaceWithCopyOf( const QgsFieldMap &fields, const QgsFeatureList &features, const QgsCoordinateReferenceSystem &crs );
+
+    /*
      *  Returns a copy of features on the internal clipboard,
      *  the caller assumes responsibility for destroying the contents
      *  when it's done with it.
@@ -133,6 +139,10 @@ class QgsClipboard
     const QgsFieldMap &fields() { return mFeatureFields; }
 
   private:
+    /*
+     * Set system clipboard from previously set features.
+     */
+    void setSystemClipboard();
 
     /** QGIS-internal vector feature clipboard.
         Stored as values not pointers as each clipboard operation
