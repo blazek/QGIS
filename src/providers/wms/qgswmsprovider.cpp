@@ -3979,7 +3979,8 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
 
     if ( theFormat == IdentifyFormatHtml || theFormat == IdentifyFormatText )
     {
-      resultStrings << mIdentifyResult;
+      //resultStrings << mIdentifyResult;
+      results.insert( count, mIdentifyResult );
     }
     else if ( theFormat == IdentifyFormatFeature ) // GML
     {
@@ -4018,13 +4019,13 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
 
   if ( theFormat == IdentifyFormatHtml )
   {
-    str = "<table>\n<tr><td>" + resultStrings.join( "</td></tr>\n<tr><td>" ) + "</td></tr>\n</table>";
-    results.insert( 1, str );
+    //str = "<table>\n<tr><td>" + resultStrings.join( "</td></tr>\n<tr><td>" ) + "</td></tr>\n</table>";
+    //results.insert( 1, str );
   }
   else if ( theFormat == IdentifyFormatText )
   {
-    str = resultStrings.join( "\n-------------\n" );
-    results.insert( 1, str );
+    //str = resultStrings.join( "\n-------------\n" );
+    //results.insert( 1, str );
   }
 
   return results;

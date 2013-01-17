@@ -325,6 +325,8 @@ void QgsWFSData::endElement( const XML_Char* el )
     if ( mCurrentWKBSize > 0 )
     {
       mCurrentFeature->setGeometryAndOwnership( mCurrentWKB, mCurrentWKBSize );
+      // TODO: what QgsFfeature.isValid() really means? Feature could be valid even without geometry?
+      mCurrentFeature->setValid( true );
     }
     mFeatures.insert( mCurrentFeature->id(), mCurrentFeature );
     if ( !mCurrentFeatureId.isEmpty() )

@@ -48,15 +48,21 @@
 #include <QDesktopServices>
 #include <QMessageBox>
 #include <QComboBox>
+#include <QWebFrame>
 
 QgsWebView::QgsWebView( QWidget *parent ) : QWebView( parent )
 {
+  setSizePolicy( QSizePolicy::MinimumExpanding, QSizePolicy::Minimum );
   page()->setNetworkAccessManager( QgsNetworkAccessManager::instance() );
   page()->setLinkDelegationPolicy( QWebPage::DelegateAllLinks );
   settings()->setAttribute( QWebSettings::LocalContentCanAccessRemoteUrls, true );
 #ifdef QGISDEBUG
   settings()->setAttribute( QWebSettings::DeveloperExtrasEnabled, true );
 #endif
+  connect( this->page()->mainFrame(), SIGNAL( contentsSizeChanged( const QSize & ) ),
+           this, SLOT( handleContentsSizeChanged( const QSize & ) ) );
+  connect( this->page(), SIGNAL( loadFinished( bool ) ) ,
+           this, SLOT( loadFinished( bool ) ) );
 }
 
 void QgsWebView::print( void )
@@ -80,6 +86,72 @@ void QgsWebView::contextMenuEvent( QContextMenuEvent *e )
   }
 }
 
+// QgsWebView size:
+// ---------------
+//
+// 1) QTreeWidget is not able to scroll continuously through the content of large widgets// iserted into items via setItemWidget, it always jumps to the top of next item
+// and it is not able to scroll to the bottom of an inserted large widget (until
+// the QTreeWidget itself is large enough to show the whole inserted widget).
+// => We have to keep the height of QgsWebView smaller than the height of QTreeWidget
+// so that a user can see it entire, even if this height is smaller than QgsWebView
+// content (i.e. QgsWebView scroolbar is added). We make it even a bit smaller so
+// that a user can see a bit of context (items above/below) when scrolling which
+// is more pleasant.
+//
+// 2) contentsSize() is 0,0 until a page is loaded. If there are no external resources
+// (like images) used, contentsSize() is available immediately after setHtml(),
+// otherwise the contentSize() is 0,0 until the page is loaded and contentsSizeChanged ()
+// is emited.
+//
+// 3) If QgsWebView is resized (on page load) after it was inserted into QTreeWidget,
+// the row does not reflect that change automaticaly and consecutive resize
+// of QTreeWidget will cause to shrink QgsWebView to the original row height.
+// That is expected, Qt: "setItemWidget() should only be used to display static
+// content...
+// => we must not change QgsWebView size after it was inserted to QTreeWidget
+
+// TODO(?): Sometimes it may happen that if multiple QgsWebView are inserted to
+// QTreeWidget for the first time, and both share the same external source (image)
+// the layout gets somehow confused - wrong positions, overlapped (Qt bug?)
+// until next QTreeWidget resize.
+
+// TODO(?): if the results dialog is resized to smaller heigh, existing QgsWebView
+// are not (and must not be!) resized and scrolling becomes a bit unpleasant
+// until next identify. AFAIK it could only be solved using QItemDelegate.
+
+// size hint according to content
+QSize QgsWebView::sizeHint() const
+{
+  QSize s = this->page()->mainFrame()->contentsSize();
+  QgsDebugMsg( QString( "content size: %1 x %2" ).arg( s.width() ).arg( s.height() ) );
+  int height = s.height();
+
+  // if page is not yet loaded set some minimum height
+  if ( height == 0 )
+  {
+    height = 100;
+  }
+  else
+  {
+    // parent is qt_scrollarea_viewport
+    // parent is not available the first time - before results dialog was shown
+    QWidget *widget = qobject_cast<QWidget *>( parent() );
+    if ( widget )
+    {
+      int max = widget->size().height()  * 0.9;
+      QgsDebugMsg( QString( "parent widget height = %1 max height = %2" ).arg( widget->size().height() ).arg( max ) );
+      if ( height > max ) height = max;
+    }
+    else
+    {
+      QgsDebugMsg( "parent not available" ) ;
+    }
+  }
+  s = QSize( size().width(), height );
+  QgsDebugMsg( QString( "size: %1 x %2" ).arg( s.width() ).arg( s.height() ) );
+  return s;
+}
+
 class QgsIdentifyResultsDock : public QDockWidget
 {
   public:
@@ -95,6 +167,40 @@ class QgsIdentifyResultsDock : public QDockWidget
       deleteLater();
     }
 };
+
+QgsIdentifyResultsFeatureItem::QgsIdentifyResultsFeatureItem( const QgsFields &fields, const QgsFeature &feature, const QgsCoordinateReferenceSystem &crs, const QStringList & strings )
+    : QTreeWidgetItem( strings )
+    , mFields( fields )
+    , mFeature( feature )
+    , mCrs( crs )
+{
+}
+
+void QgsIdentifyResultsWebViewItem::setHtml( const QString &html )
+{
+  mWebView->setHtml( html );
+}
+
+QgsIdentifyResultsWebViewItem::QgsIdentifyResultsWebViewItem( QTreeWidget *treeWidget )
+{
+  mWebView = new QgsWebView( treeWidget );
+  mWebView->hide();
+  setText( 0, tr( "Loading..." ) );
+  connect( mWebView, SIGNAL( loadFinished( bool ) ) ,
+           this, SLOT( loadFinished( bool ) ) );
+}
+
+void QgsIdentifyResultsWebViewItem::loadFinished( bool ok )
+{
+  Q_UNUSED( ok );
+  QgsDebugMsg( "Entered" );
+
+  mWebView->show();
+  treeWidget()->setItemWidget( this, 0, mWebView );
+
+  // Span columns to save some space, must be after setItemWidget() to take efect.
+  setFirstColumnSpanned( true );
+}
 
 // Tree hierarchy
 //
@@ -126,6 +232,7 @@ QgsIdentifyResultsDialog::QgsIdentifyResultsDialog( QgsMapCanvas *canvas, QWidge
   mExpandToolButton->setIcon( QgsApplication::getThemeIcon( "/mActionExpandTree.png" ) );
   mCollapseToolButton->setIcon( QgsApplication::getThemeIcon( "/mActionCollapseTree.png" ) );
   mExpandNewToolButton->setIcon( QgsApplication::getThemeIcon( "/mActionExpandNewTree.png" ) );
+  mCopyToolButton->setIcon( QgsApplication::getThemeIcon( "/mActionEditCopy.png" ) );
   mPrintToolButton->setIcon( QgsApplication::getThemeIcon( "/mActionFilePrint.png" ) );
 
   QSettings mySettings;
@@ -139,6 +246,7 @@ QgsIdentifyResultsDialog::QgsIdentifyResultsDialog( QgsMapCanvas *canvas, QWidge
     QgisApp::instance()->addDockWidget( Qt::LeftDockWidgetArea, mDock );
   }
   mExpandNewToolButton->setChecked( mySettings.value( "/Map/identifyExpand", false ).toBool() );
+  mCopyToolButton->setEnabled( false );
   lstResults->setColumnCount( 2 );
   setColumnText( 0, tr( "Feature" ) );
   setColumnText( 1, tr( "Value" ) );
@@ -186,6 +294,7 @@ QTreeWidgetItem *QgsIdentifyResultsDialog::layerItem( QObject *layer )
 
 void QgsIdentifyResultsDialog::addFeature( QgsVectorLayer *vlayer,
                                      const QgsFeature &f,
+                                     const QgsCoordinateReferenceSystem &crs,
                                      const QMap<QString, QString> &derivedAttributes )
 {
   QTreeWidgetItem *layItem = layerItem( vlayer );
@@ -205,7 +314,8 @@ void QgsIdentifyResultsDialog::addFeature( QgsVectorLayer *vlayer,
     connect( vlayer, SIGNAL( editingStopped() ), this, SLOT( editingToggled() ) );
   }
 
-  QTreeWidgetItem *featItem = new QTreeWidgetItem;
+  //QgsIdentifyResultsFeatureItem *featItem = new QgsIdentifyResultsFeatureItem( fields, f, crs );
+  QgsIdentifyResultsFeatureItem *featItem = new QgsIdentifyResultsFeatureItem( vlayer->pendingFields(), f, crs );
   featItem->setData( 0, Qt::UserRole, FID_TO_STRING( f.id() ) );
   featItem->setData( 0, Qt::UserRole + 1, mFeatures.size() );
   mFeatures << f;
@@ -301,7 +411,9 @@ void QgsIdentifyResultsDialog::addFeature( QgsRasterLayer *layer,
                                      QString label,
                                      const QMap<QString, QString> &attributes,
                                      const QMap<QString, QString> &derivedAttributes,
-                                     const QgsGeometry geometry )
+                                     const QgsFields &fields,
+                                     const QgsFeature &feature,
+                                     const QgsCoordinateReferenceSystem &crs )
 {
   QTreeWidgetItem *layItem = layerItem( layer );
 
@@ -350,25 +462,18 @@ void QgsIdentifyResultsDialog::addFeature( QgsRasterLayer *layer,
     connect( layer, SIGNAL( layerCrsChanged() ), this, SLOT( layerDestroyed() ) );
   }
 
-  QTreeWidgetItem *featItem = new QTreeWidgetItem( QStringList() << label << "" );
-  featItem->setData( 0, Qt::UserRole, -1 );
-  featItem->setData( 0, Qt::UserRole + 1, qVariantFromValue( geometry ) );
+  QgsIdentifyResultsFeatureItem *featItem = new QgsIdentifyResultsFeatureItem( fields, feature, crs, QStringList() << label << "" );
+  //featItem->setData( 0, Qt::UserRole, -1 ); // FID
   layItem->addChild( featItem );
 
-  // TODO: better
-  //if ( layer && layer->providerType() == "wms" )
-  if ( layer && layer->providerType() == "wms" && currentFormat == QgsRasterDataProvider::IdentifyFormatHtml )
+  if ( currentFormat == QgsRasterDataProvider::IdentifyFormatHtml )
   {
-    QTreeWidgetItem *attrItem = new QTreeWidgetItem( QStringList() << attributes.begin().key() << "" );
-    featItem->addChild( attrItem );
-
-    QgsWebView *wv = new QgsWebView( attrItem->treeWidget() );
-    wv->setHtml( attributes.begin().value() );
+    QgsIdentifyResultsWebViewItem *attrItem = new QgsIdentifyResultsWebViewItem( lstResults );
+    featItem->addChild( attrItem ); // before setHtml()!
+    attrItem->setHtml( attributes.begin().value() );
+    connect( attrItem->webView(), SIGNAL( linkClicked( const QUrl & ) ), this, SLOT( openUrl( const QUrl & ) ) );
 
     mPrintToolButton->setVisible( true );
-
-    connect( wv, SIGNAL( linkClicked( const QUrl & ) ), this, SLOT( openUrl( const QUrl & ) ) );
-    attrItem->treeWidget()->setItemWidget( attrItem, 1, wv );
   }
   else
   {
@@ -687,7 +792,7 @@ QTreeWidgetItem *QgsIdentifyResultsDialog::featureItem( QTreeWidgetItem *item )
   if ( !item )
     return 0;
 
-  QTreeWidgetItem *featItem;
+  QTreeWidgetItem *featItem = 0;
   if ( item->parent() )
   {
     if ( item->parent()->parent() )
@@ -711,11 +816,24 @@ QTreeWidgetItem *QgsIdentifyResultsDialog::featureItem( QTreeWidgetItem *item )
   }
   else
   {
-    // layer item
-    if ( item->childCount() > 1 )
-      return 0;
+    // top level layer item, return feature item if only one
 
-    featItem = item->child( 0 );
+    //if ( item->childCount() > 1 )
+    //  return 0;
+    //featItem = item->child( 0 );
+
+    int count = 0;
+
+    for ( int i = 0; i < item->childCount(); i++ )
+    {
+      QgsIdentifyResultsFeatureItem *fi = dynamic_cast<QgsIdentifyResultsFeatureItem *>( item->child( i ) );
+      if ( fi )
+      {
+        count++;
+        if ( !featItem ) featItem = fi;
+      }
+    }
+    if ( count != 1 ) return 0;
   }
 
   return featItem;
@@ -780,6 +898,10 @@ void QgsIdentifyResultsDialog::itemExpanded( QTreeWidgetItem *item )
 void QgsIdentifyResultsDialog::handleCurrentItemChanged( QTreeWidgetItem *current, QTreeWidgetItem *previous )
 {
   Q_UNUSED( previous );
+
+  QgsIdentifyResultsFeatureItem *featItem = dynamic_cast<QgsIdentifyResultsFeatureItem *>( featureItem( current ) );
+  mCopyToolButton->setEnabled( featItem && featItem->feature().isValid() );
+
   if ( !current )
   {
     emit selectedFeatureChanged( 0, 0 );
@@ -790,7 +912,6 @@ void QgsIdentifyResultsDialog::handleCurrentItemChanged( QTreeWidgetItem *curren
   mPrintToolButton->setEnabled( wv != 0 );
 
   QTreeWidgetItem *layItem = layerItem( current );
-
   if ( current == layItem )
   {
     highlightLayer( layItem );
@@ -919,14 +1040,16 @@ void QgsIdentifyResultsDialog::highlightFeature( QTreeWidgetItem *item )
   if ( !layer && !rlayer )
     return;
 
-  QTreeWidgetItem *featItem = featureItem( item );
+  //QTreeWidgetItem *featItem = featureItem( item );
+  QgsIdentifyResultsFeatureItem *featItem = dynamic_cast<QgsIdentifyResultsFeatureItem *>( featureItem( item ) );
   if ( !featItem )
     return;
+
 
   if ( mHighlights.contains( featItem ) )
     return;
 
-  QgsGeometry geometry;
+  //QgsGeometry geometry;
   if ( layer )
   {
     QgsFeatureId fid = STRING_TO_FID( featItem->data( 0, Qt::UserRole ) );
@@ -938,21 +1061,23 @@ void QgsIdentifyResultsDialog::highlightFeature( QTreeWidgetItem *item )
       return;
     }
 
-    if ( !feat.geometry() )
-    {
-      return;
-    }
+    //if ( !feat.geometry() )
+    //{
+    //  return;
+    //}
 
-    geometry = QgsGeometry( *feat.geometry() );
+    //geometry = QgsGeometry( *feat.geometry() );
   }
   else // raster
   {
-    geometry = featItem->data( 0, Qt::UserRole + 1 ).value<QgsGeometry>();
-    QgsDebugMsg( QString( "geometry.wkbType() = %1" ).arg( geometry.wkbType() ) );
-    if ( geometry.wkbType() == QGis::WKBUnknown ) return;
+    //geometry = featItem->data( 0, Qt::UserRole + 1 ).value<QgsGeometry>();
+    //QgsDebugMsg( QString( "geometry.wkbType() = %1" ).arg( geometry.wkbType() ) );
+    //if ( geometry.wkbType() == QGis::WKBUnknown ) return;
   }
 
-  QgsHighlight *h = new QgsHighlight( mCanvas, &geometry, layer );
+  if ( !featItem->feature().geometry() || featItem->feature().geometry()->wkbType() == QGis::WKBUnknown ) return;
+
+  QgsHighlight *h = new QgsHighlight( mCanvas, featItem->feature().geometry(), layer );
   if ( h )
   {
     h->setWidth( 2 );
@@ -1153,6 +1278,26 @@ void QgsIdentifyResultsDialog::on_mExpandNewToolButton_toggled( bool checked )
 {
   QSettings settings;
   settings.setValue( "/Map/identifyExpand", checked );
+}
+
+void QgsIdentifyResultsDialog::on_mCopyToolButton_clicked( bool checked )
+{
+  Q_UNUSED( checked );
+  QgsDebugMsg( "Entered" );
+
+  QgsIdentifyResultsFeatureItem *item = dynamic_cast<QgsIdentifyResultsFeatureItem *>( featureItem( lstResults->selectedItems().value( 0 ) ) );
+
+  if ( !item ) // should not happen
+  {
+    QgsDebugMsg( "Selected item is not feature" );
+    return;
+  }
+
+  //QgsFieldMap fields;
+  QgsFeatureList features;
+  features << item->feature();
+  //QgsCoordinateReferenceSystem crs;
+  emit copyToClipboard( item->fields(), features, item->crs() );
 }
 
 void QgsIdentifyResultsDialog::formatChanged( int index )

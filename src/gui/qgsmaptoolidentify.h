@@ -46,49 +46,49 @@ class GUI_EXPORT QgsMapToolIdentify : public QgsMapTool
 
     enum IdentifyMode
     {
-        DefaultQgsSetting=-1,
-        ActiveLayer,
-        TopDownStopAtFirst,
-        TopDownAll
+      DefaultQgsSetting = -1,
+      ActiveLayer,
+      TopDownStopAtFirst,
+      TopDownAll
     };
 
     enum LayerType
     {
-        AllLayers=-1,
-        VectorLayer,
-        RasterLayer
+      AllLayers = -1,
+      VectorLayer,
+      RasterLayer
     };
 
     struct VectorResult
     {
-        VectorResult(){}
-        VectorResult(QgsVectorLayer * layer, QgsFeature feature, QMap< QString, QString > derivedAttributes):
-            mLayer( layer ), mFeature( feature ), mDerivedAttributes( derivedAttributes )  {}
-        QgsVectorLayer* mLayer;
-        QgsFeature mFeature;
-        QMap< QString, QString > mDerivedAttributes;
+      VectorResult() {}
+      VectorResult( QgsVectorLayer * layer, QgsFeature feature, QMap< QString, QString > derivedAttributes ):
+          mLayer( layer ), mFeature( feature ), mDerivedAttributes( derivedAttributes )  {}
+      QgsVectorLayer* mLayer;
+      QgsFeature mFeature;
+      QMap< QString, QString > mDerivedAttributes;
     };
 
     struct RasterResult
     {
-        RasterResult(){}
-        RasterResult( QgsRasterLayer * layer, QString label, QMap< QString, QString > attributes, QMap< QString, QString > derivedAttributes):
-            mLayer( layer ), mLabel( label ), mAttributes( attributes ), mDerivedAttributes( derivedAttributes )  {}
-        QgsRasterLayer* mLayer;
-        QString mLabel;
-        QMap< QString, QString > mAttributes;
-        QMap< QString, QString > mDerivedAttributes;
+      RasterResult() {}
+      RasterResult( QgsRasterLayer * layer, QString label, QMap< QString, QString > attributes, QMap< QString, QString > derivedAttributes ):
+          mLayer( layer ), mLabel( label ), mAttributes( attributes ), mDerivedAttributes( derivedAttributes )  {}
+      QgsRasterLayer* mLayer;
+      QString mLabel;
+      QMap< QString, QString > mAttributes;
+      QMap< QString, QString > mDerivedAttributes;
     };
 
     struct IdentifyResults
     {
-        IdentifyResults(){}
-        IdentifyResults ( QList<VectorResult> vectorResults , QList<RasterResult> rasterResults) :
-            mVectorResults( vectorResults),
-            mRasterResults( rasterResults )
-        {}
-        QList<VectorResult> mVectorResults;
-        QList<RasterResult> mRasterResults;
+      IdentifyResults() {}
+      IdentifyResults( QList<VectorResult> vectorResults , QList<RasterResult> rasterResults ) :
+          mVectorResults( vectorResults ),
+          mRasterResults( rasterResults )
+      {}
+      QList<VectorResult> mVectorResults;
+      QList<RasterResult> mRasterResults;
     };
 
     //! constructor
@@ -115,7 +115,7 @@ class GUI_EXPORT QgsMapToolIdentify : public QgsMapTool
     @param layerList Performs the identification within the given list of layers. Default value is an empty list, i.e. uses all the layers.
     @param mode Identification mode. Can use Qgis default settings or a defined mode. Default mode is DefaultQgsSetting.
     @return true if identification succeeded and a feature has been found, false otherwise.*/
-    bool identify(int x, int y, QList<QgsMapLayer*> layerList = QList<QgsMapLayer*>(), IdentifyMode mode = DefaultQgsSetting);
+    bool identify( int x, int y, QList<QgsMapLayer*> layerList = QList<QgsMapLayer*>(), IdentifyMode mode = DefaultQgsSetting );
 
     /** Performs the identification.
     To avoid beeing forced to specify IdentifyMode with a list of layers
@@ -125,17 +125,21 @@ class GUI_EXPORT QgsMapToolIdentify : public QgsMapTool
     @param mode Identification mode. Can use Qgis default settings or a defined mode.
     @param layerType Only performs identification in a certain type of layers (raster, vector). Default value is AllLayers.
     @return true if identification succeeded and a feature has been found, false otherwise.*/
-    bool identify(int x, int y, IdentifyMode mode, LayerType layerType = AllLayers);
+    bool identify( int x, int y, IdentifyMode mode, LayerType layerType = AllLayers );
 
     /** Access to results */
     IdentifyResults &results();
 
   public slots:
     void formatChanged( QgsRasterLayer *layer );
+    void handleCopyToClipboard( const QgsFieldMap &fields, const QgsFeatureList &features, const QgsCoordinateReferenceSystem &crs );
+
 
   signals:
     void identifyProgress( int, int );
     void identifyMessage( QString );
+    void copyToClipboard( const QgsFieldMap &fields, const QgsFeatureList &features, const QgsCoordinateReferenceSystem &crs );
+
 
   private:
     /** Performs the identification.
@@ -147,9 +151,9 @@ class GUI_EXPORT QgsMapToolIdentify : public QgsMapTool
     @param layerList Performs the identification within the given list of layers.
     @param layerType Only performs identification in a certain type of layers (raster, vector).
     @return true if identification succeeded and a feature has been found, false otherwise.*/
-    bool identify(int x, int y, IdentifyMode mode,  QList<QgsMapLayer*> layerList, LayerType layerType = AllLayers);
+    bool identify( int x, int y, IdentifyMode mode,  QList<QgsMapLayer*> layerList, LayerType layerType = AllLayers );
 
-    bool identify( QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel, IdentifyMode mode,  QList<QgsMapLayer*> layerList, LayerType layerType = AllLayers);
+    bool identify( QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel, IdentifyMode mode,  QList<QgsMapLayer*> layerList, LayerType layerType = AllLayers );
 
     //bool identifyLayer( QgsMapLayer *layer, int x, int y, LayerType layerType = AllLayers );
     bool identifyLayer( QgsMapLayer *layer, QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel, LayerType layerType = AllLayers );
@@ -161,6 +165,8 @@ class GUI_EXPORT QgsMapToolIdentify : public QgsMapTool
 
     /** Transforms the measurements of derived attributes in the desired units*/
     virtual QGis::UnitType displayUnits();
+
+    QMap< QString, QString > featureDerivedAttributes( QgsFeature *feature, QgsMapLayer *layer );
 
     IdentifyResults mResultData;
 

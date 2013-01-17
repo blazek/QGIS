@@ -225,7 +225,6 @@ bool QgsMapToolIdentify::identifyVectorLayer( QgsVectorLayer *layer, QgsPoint po
   QSettings settings;
   double identifyValue = settings.value( "/Map/identifyRadius", QGis::DEFAULT_IDENTIFY_RADIUS ).toDouble();
 
-  QString ellipsoid = QgsProject::instance()->readEntry( "Measure", "/Ellipsoid", GEO_NONE );
 
   if ( identifyValue <= 0.0 )
     identifyValue = QGis::DEFAULT_IDENTIFY_RADIUS;
@@ -262,15 +261,6 @@ bool QgsMapToolIdentify::identifyVectorLayer( QgsVectorLayer *layer, QgsPoint po
     QgsDebugMsg( QString( "Caught CRS exception %1" ).arg( cse.what() ) );
   }
 
-  // init distance/area calculator
-  QgsDistanceArea calc;
-  if ( !featureList.count() == 0 )
-  {
-    calc.setEllipsoidalMode( mCanvas->hasCrsTransformEnabled() );
-    calc.setEllipsoid( ellipsoid );
-    calc.setSourceCrs( layer->crs().srsid() );
-  }
-
   QgsFeatureList::iterator f_it = featureList.begin();
 
   bool filter = false;
@@ -292,57 +282,12 @@ bool QgsMapToolIdentify::identifyVectorLayer( QgsVectorLayer *layer, QgsPoint po
 
     featureCount++;
 
-    // Calculate derived attributes and insert:
-    // measure distance or area depending on geometry type
-    if ( layer->geometryType() == QGis::Line )
-    {
-      double dist = calc.measure( f_it->geometry() );
-      QGis::UnitType myDisplayUnits;
-      convertMeasurement( calc, dist, myDisplayUnits, false );
-      QString str = calc.textUnit( dist, 3, myDisplayUnits, false );  // dist and myDisplayUnits are out params
-      derivedAttributes.insert( tr( "Length" ), str );
-      if ( f_it->geometry()->wkbType() == QGis::WKBLineString ||
-           f_it->geometry()->wkbType() == QGis::WKBLineString25D )
-      {
-        // Add the start and end points in as derived attributes
-        QgsPoint pnt = mCanvas->mapRenderer()->layerToMapCoordinates( layer, f_it->geometry()->asPolyline().first() );
-        str = QLocale::system().toString( pnt.x(), 'g', 10 );
-        derivedAttributes.insert( tr( "firstX", "attributes get sorted; translation for lastX should be lexically larger than this one" ), str );
-        str = QLocale::system().toString( pnt.y(), 'g', 10 );
-        derivedAttributes.insert( tr( "firstY" ), str );
-        pnt = mCanvas->mapRenderer()->layerToMapCoordinates( layer, f_it->geometry()->asPolyline().last() );
-        str = QLocale::system().toString( pnt.x(), 'g', 10 );
-        derivedAttributes.insert( tr( "lastX", "attributes get sorted; translation for firstX should be lexically smaller than this one" ), str );
-        str = QLocale::system().toString( pnt.y(), 'g', 10 );
-        derivedAttributes.insert( tr( "lastY" ), str );
-      }
-    }
-    else if ( layer->geometryType() == QGis::Polygon )
-    {
-      double area = calc.measure( f_it->geometry() );
-      double perimeter = calc.measurePerimeter( f_it->geometry() );
-      QGis::UnitType myDisplayUnits;
-      convertMeasurement( calc, area, myDisplayUnits, true );  // area and myDisplayUnits are out params
-      QString str = calc.textUnit( area, 3, myDisplayUnits, true );
-      derivedAttributes.insert( tr( "Area" ), str );
-      convertMeasurement( calc, perimeter, myDisplayUnits, false );  // perimeter and myDisplayUnits are out params
-      str = calc.textUnit( perimeter, 3, myDisplayUnits, false );
-      derivedAttributes.insert( tr( "Perimeter" ), str );
-    }
-    else if ( layer->geometryType() == QGis::Point &&
-              ( f_it->geometry()->wkbType() == QGis::WKBPoint ||
-                f_it->geometry()->wkbType() == QGis::WKBPoint25D ) )
-    {
-      // Include the x and y coordinates of the point as a derived attribute
-      QgsPoint pnt = mCanvas->mapRenderer()->layerToMapCoordinates( layer, f_it->geometry()->asPoint() );
-      QString str = QLocale::system().toString( pnt.x(), 'g', 10 );
-      derivedAttributes.insert( "X", str );
-      str = QLocale::system().toString( pnt.y(), 'g', 10 );
-      derivedAttributes.insert( "Y", str );
-    }
+    derivedAttributes.unite( featureDerivedAttributes( &( *f_it ), layer ) );
 
     derivedAttributes.insert( tr( "feature id" ), fid < 0 ? tr( "new feature" ) : FID_TO_STRING( fid ) );
 
+    QgsDebugMsg("TODO: layer crs");
+    //results()->addFeature( layer, layer->dataProvider()->fields(), *f_it, layer->crs(), derivedAttributes );
     mResultData.mVectorResults.append( VectorResult(layer, *f_it, derivedAttributes));
   }
 
@@ -354,6 +299,70 @@ bool QgsMapToolIdentify::identifyVectorLayer( QgsVectorLayer *layer, QgsPoint po
   QgsDebugMsg( "Feature count on identify: " + QString::number( featureCount ) );
 
   return featureCount > 0;
+}
+
+QMap< QString, QString > QgsMapToolIdentify::featureDerivedAttributes( QgsFeature *feature, QgsMapLayer *layer )
+{
+  // Calculate derived attributes and insert:
+  // measure distance or area depending on geometry type
+  QMap< QString, QString > derivedAttributes;
+
+  // init distance/area calculator
+  QString ellipsoid = QgsProject::instance()->readEntry( "Measure", "/Ellipsoid", GEO_NONE );
+  QgsDistanceArea calc;
+  calc.setEllipsoidalMode( mCanvas->hasCrsTransformEnabled() );
+  calc.setEllipsoid( ellipsoid );
+  calc.setSourceCrs( layer->crs().srsid() );
+
+  QGis::GeometryType geometryType = feature->geometry()->type();
+  if ( geometryType == QGis::Line )
+  {
+    double dist = calc.measure( feature->geometry() );
+    QGis::UnitType myDisplayUnits;
+    convertMeasurement( calc, dist, myDisplayUnits, false );
+    QString str = calc.textUnit( dist, 3, myDisplayUnits, false );  // dist and myDisplayUnits are out params
+    derivedAttributes.insert( tr( "Length" ), str );
+    if ( feature->geometry()->wkbType() == QGis::WKBLineString ||
+         feature->geometry()->wkbType() == QGis::WKBLineString25D )
+    {
+      // Add the start and end points in as derived attributes
+      QgsPoint pnt = mCanvas->mapRenderer()->layerToMapCoordinates( layer, feature->geometry()->asPolyline().first() );
+      str = QLocale::system().toString( pnt.x(), 'g', 10 );
+      derivedAttributes.insert( tr( "firstX", "attributes get sorted; translation for lastX should be lexically larger than this one" ), str );
+      str = QLocale::system().toString( pnt.y(), 'g', 10 );
+      derivedAttributes.insert( tr( "firstY" ), str );
+      pnt = mCanvas->mapRenderer()->layerToMapCoordinates( layer, feature->geometry()->asPolyline().last() );
+      str = QLocale::system().toString( pnt.x(), 'g', 10 );
+      derivedAttributes.insert( tr( "lastX", "attributes get sorted; translation for firstX should be lexically smaller than this one" ), str );
+      str = QLocale::system().toString( pnt.y(), 'g', 10 );
+      derivedAttributes.insert( tr( "lastY" ), str );
+    }
+  }
+  else if ( geometryType == QGis::Polygon )
+  {
+    double area = calc.measure( feature->geometry() );
+    double perimeter = calc.measurePerimeter( feature->geometry() );
+    QGis::UnitType myDisplayUnits;
+    convertMeasurement( calc, area, myDisplayUnits, true );  // area and myDisplayUnits are out params
+    QString str = calc.textUnit( area, 3, myDisplayUnits, true );
+    derivedAttributes.insert( tr( "Area" ), str );
+    convertMeasurement( calc, perimeter, myDisplayUnits, false );  // perimeter and myDisplayUnits are out params
+    str = calc.textUnit( perimeter, 3, myDisplayUnits, false );
+    derivedAttributes.insert( tr( "Perimeter" ), str );
+  }
+  else if ( geometryType == QGis::Point &&
+            ( feature->geometry()->wkbType() == QGis::WKBPoint ||
+              feature->geometry()->wkbType() == QGis::WKBPoint25D ) )
+  {
+    // Include the x and y coordinates of the point as a derived attribute
+    QgsPoint pnt = mCanvas->mapRenderer()->layerToMapCoordinates( layer, feature->geometry()->asPoint() );
+    QString str = QLocale::system().toString( pnt.x(), 'g', 10 );
+    derivedAttributes.insert( "X", str );
+    str = QLocale::system().toString( pnt.y(), 'g', 10 );
+    derivedAttributes.insert( "Y", str );
+  }
+
+  return derivedAttributes;
 }
 
 bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel )
@@ -430,6 +439,8 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
     values = dprovider->identify( point, format, viewExtent, width, height );
   }
 
+  derivedAttributes.insert( tr( "(clicked coordinate)" ), point.toString() );
+
   QString type = tr( "Raster" );
   QgsGeometry geometry;
   if ( format == QgsRasterDataProvider::IdentifyFormatValue )
@@ -448,10 +459,11 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
       }
       attributes.insert( dprovider->generateBandName( bandNo ), valueString );
     }
+    QgsDebugMsg("TODO");
+    //results()->addFeature( layer, type, attributes, derivedAttributes );
   }
   else if ( format == QgsRasterDataProvider::IdentifyFormatFeature )
   {
-    derivedAttributes.insert( tr( "(clicked coordinate)" ), point.toString() );
     foreach ( int i, values.keys() )
     {
       QgsRasterFeatureList features = values.value( i ).value<QgsRasterFeatureList>();
@@ -462,13 +474,16 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
         QgsDebugMsg("TODO");
         /*
         attributes.clear();
-        
+        derivedAttributes.clear();
+        derivedAttributes.insert( tr( "(clicked coordinate)" ), point.toString() );
+        derivedAttributes.unite( featureDerivedAttributes( &feature, layer ) );
         foreach ( int k, feature.attributeMap().keys() )
         {
           QgsDebugMsg( QString( "%1 : %2" ).arg( feature.fields().value( k ).name() ).arg( feature.attributeMap().value( k ).toString() ) );
           attributes.insert( feature.fields().value( k ).name(), feature.attributeMap().value( k ).toString() );
         }
         results()->addFeature( layer, type, attributes, derivedAttributes, *feature.geometry() );
+        results()->addFeature( layer, type, attributes, derivedAttributes, feature.fields(), feature, layer->crs() );
         */
         //mResultData.mRasterResults.append( RasterResult(layer, *f_it, derivedAttributes));
       }
@@ -480,20 +495,23 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
     foreach ( int bandNo, values.keys() )
     {
       QString value = values.value( bandNo ).toString();
-      // TODO: better 'attribute' name, in theory it may be something else than WMS
-      // feature info
-      if ( format == QgsRasterDataProvider::IdentifyFormatText )
-      {
-        value = "<pre>" + value + "</pre>";
-      }
-      attributes.insert( tr( "Feature info" ), value );
+      //if ( format == QgsRasterDataProvider::IdentifyFormatText )
+      //{
+      //  value = "<pre>" + value + "</pre>";
+      //}
+
+      attributes.clear();
+      attributes.insert( "", value );
+
+      QgsDebugMsg("TODO");
+      //results()->addFeature( layer, type, attributes, derivedAttributes );
     }
   }
 
   if ( attributes.size() > 0 )
   {
     derivedAttributes.insert( tr( "(clicked coordinate)" ), point.toString() );
-    // TODO: add geometry
+    QgsDebugMsg ("TODO add geometry ?");
     //results()->addFeature( layer, type, attributes, derivedAttributes, geometry );
     mResultData.mRasterResults.append( RasterResult(layer, type, attributes, derivedAttributes));
   }
@@ -530,4 +548,10 @@ void QgsMapToolIdentify::formatChanged( QgsRasterLayer *layer )
   QgsDebugMsg( "Entered" );
   //identify( mLastPoint );
   identifyRasterLayer( layer, mLastPoint, mLastExtent, mLastMapUnitsPerPixel );
+}
+
+void QgsMapToolIdentify::handleCopyToClipboard( const QgsFieldMap &fields, const QgsFeatureList &features, const QgsCoordinateReferenceSystem &crs )
+{
+  QgsDebugMsg( "Entered" );
+  emit copyToClipboard( fields, features, crs );
 }

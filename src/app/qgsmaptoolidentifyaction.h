@@ -20,6 +20,7 @@
 #include "qgsmaptoolidentify.h"
 #include "qgspoint.h"
 #include "qgsfeature.h"
+#include "qgsfield.h"
 #include "qgsdistancearea.h"
 
 #include <QObject>
@@ -60,9 +61,6 @@ class QgsMapToolIdentifyAction : public QgsMapToolIdentify
     virtual void activate();
 
     virtual void deactivate();
-
-  //public slots:
-  //  void formatChanged( QgsRasterLayer *layer );
 
   signals:
     void identifyProgress( int, int );

@@ -60,7 +60,13 @@ QgsMapToolIdentifyAction::~QgsMapToolIdentifyAction()
 QgsIdentifyResultsDialog *QgsMapToolIdentifyAction::resultsDialog()
 {
   if ( !mResultsDialog )
+  {
     mResultsDialog = new QgsIdentifyResultsDialog( mCanvas, mCanvas->window() );
+
+    QgsDebugMsg( "TODO connect format changed" );
+    //connect( mResults, SIGNAL( formatChanged( QgsRasterLayer * ) ), this, SLOT( formatChanged( QgsRasterLayer * ) ) );
+    //connect( mResults, SIGNAL( copyToClipboard( const QgsFieldMap &, const QgsFeatureList &, const QgsCoordinateReferenceSystem & ) ), this, SLOT( handleCopyToClipboard( const QgsFieldMap &, const QgsFeatureList &, const QgsCoordinateReferenceSystem & ) ) );
+  }
 
   return mResultsDialog;
 }
@@ -77,33 +83,36 @@ void QgsMapToolIdentifyAction::canvasPressEvent( QMouseEvent *e )
 
 void QgsMapToolIdentifyAction::canvasReleaseEvent( QMouseEvent *e )
 {
-    if ( !mCanvas || mCanvas->isDrawing() )
-    {
-      return;
-    }
+  if ( !mCanvas || mCanvas->isDrawing() )
+  {
+    return;
+  }
 
-    resultsDialog()->clear();
+  resultsDialog()->clear();
 
-    connect( this, SIGNAL( identifyProgress( int, int ) ), QgisApp::instance(), SLOT( showProgress( int, int ) ) );
-    connect( this, SIGNAL( identifyMessage( QString ) ), QgisApp::instance(), SLOT( showStatusMessage( QString ) ) );
-    bool res = QgsMapToolIdentify::identify(e->x(), e->y() );
-    disconnect( this, SIGNAL( identifyProgress( int, int ) ), QgisApp::instance(), SLOT( showProgress( int, int ) ) );
-    disconnect( this, SIGNAL( identifyMessage( QString ) ), QgisApp::instance(), SLOT( showStatusMessage( QString ) ) );
+  connect( this, SIGNAL( identifyProgress( int, int ) ), QgisApp::instance(), SLOT( showProgress( int, int ) ) );
+  connect( this, SIGNAL( identifyMessage( QString ) ), QgisApp::instance(), SLOT( showStatusMessage( QString ) ) );
+  bool res = QgsMapToolIdentify::identify( e->x(), e->y() );
+  disconnect( this, SIGNAL( identifyProgress( int, int ) ), QgisApp::instance(), SLOT( showProgress( int, int ) ) );
+  disconnect( this, SIGNAL( identifyMessage( QString ) ), QgisApp::instance(), SLOT( showStatusMessage( QString ) ) );
 
 
-    QList<VectorResult>::const_iterator vresult;
-    for ( vresult = results().mVectorResults.begin(); vresult != results().mVectorResults.end(); ++vresult)
-    {
-        resultsDialog()->addFeature( vresult->mLayer, vresult->mFeature, vresult->mDerivedAttributes);
-    }
-    QList<RasterResult>::const_iterator rresult;
-    for ( rresult = results().mRasterResults.begin(); rresult != results().mRasterResults.end(); ++rresult)
-    {
-        QgsDebugMsg("TODO geometry");
-        //resultsDialog()->addFeature( rresult->mLayer, rresult->mLabel, rresult->mAttributes, rresult->mDerivedAttributes);
-        QgsGeometry geom;
-        resultsDialog()->addFeature( rresult->mLayer, rresult->mLabel, rresult->mAttributes, rresult->mDerivedAttributes, geom);
-    }
+  QList<VectorResult>::const_iterator vresult;
+  for ( vresult = results().mVectorResults.begin(); vresult != results().mVectorResults.end(); ++vresult )
+  {
+    //resultsDialog()->addFeature( vresult->mLayer, vresult->mFeature, vresult->mDerivedAttributes);
+    QgsDebugMsg( "TODO crs" );
+    QgsCoordinateReferenceSystem crs;
+    resultsDialog()->addFeature( vresult->mLayer, vresult->mFeature, crs, vresult->mDerivedAttributes );
+  }
+  QList<RasterResult>::const_iterator rresult;
+  for ( rresult = results().mRasterResults.begin(); rresult != results().mRasterResults.end(); ++rresult )
+  {
+    QgsDebugMsg( "TODO" );
+    //resultsDialog()->addFeature( rresult->mLayer, rresult->mLabel, rresult->mAttributes, rresult->mDerivedAttributes);
+    //QgsGeometry geom;
+    //resultsDialog()->addFeature( rresult->mLayer, rresult->mLabel, rresult->mAttributes, rresult->mDerivedAttributes, geom);
+  }
 
   if ( res )
   {
@@ -139,8 +148,8 @@ void QgsMapToolIdentifyAction::deactivate()
 
 QGis::UnitType QgsMapToolIdentifyAction::displayUnits()
 {
-    // Get the units for display
-    QSettings settings;
-    return QGis::fromLiteral( settings.value( "/qgis/measure/displayunits", QGis::toLiteral( QGis::Meters ) ).toString() );
+  // Get the units for display
+  QSettings settings;
+  return QGis::fromLiteral( settings.value( "/qgis/measure/displayunits", QGis::toLiteral( QGis::Meters ) ).toString() );
 }
 
