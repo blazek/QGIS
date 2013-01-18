@@ -3977,40 +3977,95 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
       QCoreApplication::processEvents( QEventLoop::ExcludeUserInputEvents );
     }
 
+    if ( mIdentifyResultBodies.size() == 0 ) // no result
+    {
+      QgsDebugMsg( "mIdentifyResultBodies is empty" );
+      continue;
+    }
+
     if ( theFormat == IdentifyFormatHtml || theFormat == IdentifyFormatText )
     {
       //resultStrings << mIdentifyResult;
-      results.insert( count, mIdentifyResult );
+      //results.insert( count, mIdentifyResult );
+      results.insert( count, QString::fromUtf8( mIdentifyResultBodies.value( 0 ) ) );
     }
     else if ( theFormat == IdentifyFormatFeature ) // GML
     {
-      QgsDebugMsg( "GML:\n" + mIdentifyResult );
-      QgsRectangle extent;
-      QMap<QgsFeatureId, QgsFeature* > features;
-      QMap<QgsFeatureId, QString > idMap;
-      QString geometryAttribute; // ???
-      QMap<QString, QPair<int, QgsField> > thematicAttributes; // ???
-      QGis::WkbType wkbType;
-      QString uri;
-      QgsWFSData dataReader( uri, &extent, features, idMap, geometryAttribute, thematicAttributes, &wkbType );
-      // parse XSD
-      dataReader.parseXSD( mIdentifyResultXsd.toAscii() );
+      // The response maybe
+      // 1) simple GML
+      //    To get also geometry from UMN Mapserver, it must be enabled for layer, e.g.:
+      //      LAYER
+      //        METADATA
+      //          "ows_geometries" "mygeom"
+      //          "ows_mygeom_type" "polygon"
+      //        END
+      //      END
 
-      // TODO: avoid converting to string and back
-      int ret = dataReader.getWFSData( mIdentifyResult.toAscii() );
-      QgsDebugMsg( QString( "parsing result = %1" ).arg( ret ) );
-      QgsFieldMap fields = dataReader.fields();
+      // 2) multipart GML + XSD
+      //    Multipart is supplied by UMN Mapserver following format is used
+      //      OUTPUTFORMAT
+      //        NAME "OGRGML"
+      //        DRIVER "OGR/GML"
+      //        FORMATOPTION "FORM=multipart"
+      //      END
+      //      WEB
+      //        METADATA
+      //          "wms_getfeatureinfo_formatlist" "OGRGML,text/html"
+      //        END
+      //      END
+      //    GetFeatureInfo multipart response does not seem to be defined in
+      //    OGC specification.
 
-      QgsRasterFeatureList featureList;
-      foreach ( QgsFeatureId id, features.keys() )
+
+      if ( mIdentifyResultBodies.size() == 1 )
       {
-        QgsFeature * feature = features.value( id );
-        QgsDebugMsg( QString( "feature id = %1" ).arg( id ) );
-
-        QgsRasterFeature rasterFeature = QgsRasterFeature( *feature, fields );
-        featureList.append( rasterFeature );
+        QgsDebugMsg( "Simple GML" );
+        continue; // not yet supported
       }
-      results.insert( count, qVariantFromValue( featureList ) );
+      else if ( mIdentifyResultBodies.size() == 2 ) // GML+XSD
+      {
+        QgsDebugMsg( "Multipart with 2 parts - expected GML + XSD" );
+        // How to find which part is GML and which XSD? Both have
+        // Content-Type: application/binary
+        // different are Content-Disposition but it is not reliable.
+        // We could analyze begining of bodies...
+        int gmlPart = 0;
+        int xsdPart = 1;
+
+        QgsDebugMsg( "GML (first 2000 bytes):\n" + QString::fromUtf8( mIdentifyResultBodies.value( gmlPart ).left( 2000 ) ) );
+        QgsRectangle extent;
+        QMap<QgsFeatureId, QgsFeature* > features;
+        QMap<QgsFeatureId, QString > idMap;
+        QString geometryAttribute; // ???
+        QMap<QString, QPair<int, QgsField> > thematicAttributes; // ???
+        QGis::WkbType wkbType;
+        QString uri;
+        QgsWFSData dataReader( uri, &extent, features, idMap, geometryAttribute, thematicAttributes, &wkbType );
+        // parse XSD
+        //dataReader.parseXSD( mIdentifyResultXsd.toAscii() );
+        dataReader.parseXSD( mIdentifyResultBodies.value( xsdPart ) );
+
+        // TODO: avoid converting to string and back
+        int ret = dataReader.getWFSData( mIdentifyResultBodies.value( gmlPart ) );
+        QgsDebugMsg( QString( "parsing result = %1" ).arg( ret ) );
+        QgsFieldMap fields = dataReader.fields();
+
+        QgsRasterFeatureList featureList;
+        foreach ( QgsFeatureId id, features.keys() )
+        {
+          QgsFeature * feature = features.value( id );
+          QgsDebugMsg( QString( "feature id = %1" ).arg( id ) );
+
+          QgsRasterFeature rasterFeature = QgsRasterFeature( *feature, fields );
+          featureList.append( rasterFeature );
+        }
+        results.insert( count, qVariantFromValue( featureList ) );
+      }
+      else
+      {
+        QgsDebugMsg( QString( "%1 parts in multipart response not supported" ).arg( mIdentifyResultBodies.size() ) );
+        continue;
+      }
     }
     count++;
   }
@@ -4033,6 +4088,9 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
 
 void QgsWmsProvider::identifyReplyFinished()
 {
+  mIdentifyResultHeaders.clear();
+  mIdentifyResultBodies.clear();
+
   if ( mIdentifyReply->error() == QNetworkReply::NoError )
   {
     QVariant redirect = mIdentifyReply->attribute( QNetworkRequest::RedirectionTargetAttribute );
@@ -4058,7 +4116,7 @@ void QgsWmsProvider::identifyReplyFinished()
       mError = tr( "Map getfeatureinfo error %1: %2" ).arg( status.toInt() ).arg( phrase.toString() );
       emit statusChanged( mError );
 
-      mIdentifyResult = "";
+      //mIdentifyResult = "";
     }
 
     if ( QgsNetworkReplyParser::isMultipart( mIdentifyReply ) )
@@ -4070,26 +4128,32 @@ void QgsWmsProvider::identifyReplyFinished()
         mErrorFormat = "text/plain";
         mError = tr( "Cannot parse multipart getfeatureinfo: %1" ).arg( parser.error() );
         emit statusChanged( mError );
-        mIdentifyResult = "";
+        //mIdentifyResult = "";
       }
       else
       {
         // TODO: check headers, xsd ...
         // take first body - GML for now
         QgsDebugMsg( QString( "%1 parts in multipart" ).arg( parser.parts() ) );
-        mIdentifyResult = parser.body( 0 );
-        mIdentifyResultXsd = parser.body( 1 );
+        //mIdentifyResult = parser.body( 0 );
+        //mIdentifyResultXsd = parser.body( 1 );
+        mIdentifyResultBodies = parser.bodies();
+        mIdentifyResultHeaders = parser.headers();
       }
     }
     else
     {
-      mIdentifyResult = QString::fromUtf8( mIdentifyReply->readAll() );
+      //mIdentifyResult = QString::fromUtf8( mIdentifyReply->readAll() );
+      mIdentifyResultBodies << mIdentifyReply->readAll();
     }
   }
   else
   {
-    mIdentifyResult = tr( "ERROR: GetFeatureInfo failed" );
-    QgsMessageLog::logMessage( tr( "Map getfeatureinfo error: %1 [%2]" ).arg( mIdentifyReply->errorString() ).arg( mIdentifyReply->url().toString() ), tr( "WMS" ) );
+    //mIdentifyResult = tr( "ERROR: GetFeatureInfo failed" );
+    mErrorFormat = "text/plain";
+    mError = tr( "Map getfeatureinfo error: %1 [%2]" ).arg( mIdentifyReply->errorString() ).arg( mIdentifyReply->url().toString() );
+    emit statusChanged( mError );
+    QgsMessageLog::logMessage( mError, tr( "WMS" ) );
   }
 
   mIdentifyReply->deleteLater();
