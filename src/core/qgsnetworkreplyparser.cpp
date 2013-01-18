@@ -60,7 +60,7 @@ QgsNetworkReplyParser::QgsNetworkReplyParser( QNetworkReply *reply )
     }
 
     QString boundary = re.cap( 1 );
-    QgsDebugMsg( "boundary = " + boundary );
+    QgsDebugMsg( QString( "boundary = %1 size = %2" ).arg( boundary ).arg( boundary.size() ) );
     boundary = "--" + boundary;
 
     // Lines should be terminated by CRLF ("\r\n") but any new line combination may appear
@@ -71,11 +71,19 @@ QgsNetworkReplyParser::QgsNetworkReplyParser( QNetworkReply *reply )
     //QVector<QByteArray> partBodies;
     while ( true )
     {
+      // 'to' is not really 'to', but index of the next byte after the end of part
       to = data.indexOf( boundary.toAscii(), from );
       if ( to < 0 )
       {
-        // It may happent that bondary is missing at the end (GeoServer)
-        // in that case, take everything to th end
+        QgsDebugMsg( QString( "No more boundaries, rest size = %1" ).arg( data.size() - from - 1 ) );
+        // It may be end, last boundary is followed by '--'
+        if ( data.size() - from - 1 == 2 && QString( data.mid( from, 2 ) ) == "--" ) // end
+        {
+          break;
+        }
+
+        // It may happen that boundary is missing at the end (GeoServer)
+        // in that case, take everything to the end
         if ( data.size() - from > 1 )
         {
           to = data.size(); // out of range OK
@@ -106,7 +114,7 @@ QgsNetworkReplyParser::QgsNetworkReplyParser( QNetworkReply *reply )
         pos++;
       }
       // parse headers
-      QMap<QByteArray, QByteArray> headersMap;
+      RawHeaderMap headersMap;
       QByteArray headers = part.left( pos );
       QgsDebugMsg( "headers:\n" + headers );
 
@@ -121,7 +129,7 @@ QgsNetworkReplyParser::QgsNetworkReplyParser( QNetworkReply *reply )
 
       mBodies.append( part.mid( pos ) );
 
-      from = to + boundary.length() + 1;
+      from = to + boundary.length();
     }
   }
   mValid = true;

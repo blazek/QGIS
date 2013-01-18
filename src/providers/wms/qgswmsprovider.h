@@ -21,6 +21,7 @@
 #define QGSWMSPROVIDER_H
 
 #include "qgsrasterdataprovider.h"
+#include "qgsnetworkreplyparser.h"
 #include "qgsrectangle.h"
 
 #include <QString>
@@ -999,7 +1000,9 @@ class QgsWmsProvider : public QgsRasterDataProvider
     /**
      * The result of the identify reply
      */
-    QString mIdentifyResult;
+    //QString mIdentifyResult;
+    QList< QgsNetworkReplyParser::RawHeaderMap > mIdentifyResultHeaders;
+    QList<QByteArray> mIdentifyResultBodies;
 
     // TODO: better
     QString mIdentifyResultXsd;
