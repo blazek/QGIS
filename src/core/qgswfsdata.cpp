@@ -27,8 +27,39 @@
 #include <QSettings>
 #include <QUrl>
 
+#include <limits>
+
 const char NS_SEPARATOR = '?';
 const QString GML_NAMESPACE = "http://www.opengis.net/gml";
+
+QgsGmlFeatureClass::QgsGmlFeatureClass( )
+{
+}
+
+QgsGmlFeatureClass::QgsGmlFeatureClass( QString name, QString path )
+    : mName( name )
+    , mPath( path )
+{
+}
+
+QgsGmlFeatureClass::~QgsGmlFeatureClass()
+{
+}
+
+void QgsGmlFeatureClass::addField( const QgsField & field )
+{
+  mFieldMap.insert( field.name(), field );
+}
+
+
+// --------------------------- QgsWFSData -------------------------------
+QgsWFSData::QgsWFSData()
+    : QObject()
+{
+  mGeometryNames << "Point" << "MultiPoint"
+  << "LineString" << "MultiLineString"
+  << "Polygon" << "MultiPolygon";
+}
 
 QgsWFSData::QgsWFSData(
   const QString& uri,
@@ -478,7 +509,7 @@ void QgsWFSData::characters( const XML_Char* chars, int len )
     return;
   }
 
-  QgsWFSData::parseMode theParseMode = mParseModeStack.top();
+  QgsWFSData::ParseMode theParseMode = mParseModeStack.top();
   if ( theParseMode == QgsWFSData::attribute || theParseMode == QgsWFSData::coordinate )
   {
     mStringCash.append( QString::fromUtf8( chars, len ) );
@@ -987,4 +1018,204 @@ QMap<int, QgsField> QgsWFSData::fields()
     fields.insert( val.first, val.second );
   }
   return fields;
+}
+
+bool QgsWFSData::getSchema( const QByteArray &data )
+{
+  QgsDebugMsg( "Entered" );
+  mLevel = 0;
+  mSkipLevel = std::numeric_limits<int>::max();
+  XML_Parser p = XML_ParserCreateNS( NULL, NS_SEPARATOR );
+  XML_SetUserData( p, this );
+  XML_SetElementHandler( p, QgsWFSData::startSchema, QgsWFSData::endSchema );
+  XML_SetCharacterDataHandler( p, QgsWFSData::charsSchema );
+  int atEnd = 1;
+  XML_Parse( p, data.constData(), data.size(), atEnd );
+  return 0;
+}
+
+void QgsWFSData::startElementSchema( const XML_Char* el, const XML_Char** attr )
+{
+  mLevel++;
+
+  QString elementName( el );
+  QgsDebugMsg( QString( "-> %1 %2 %3" ).arg( mLevel ).arg( elementName ).arg( mLevel >= mSkipLevel ? "skip" : "" ) );
+
+  if ( mLevel >= mSkipLevel )
+  {
+    //QgsDebugMsg( QString("skip level %1").arg( mLevel ) );
+    return;
+  }
+
+  mParsePathStack.append( elementName );
+  QString path = mParsePathStack.join( "." );
+
+  QStringList splitName =  elementName.split( NS_SEPARATOR );
+  QString localName = splitName.last();
+  QString ns = splitName.size() > 1 ? splitName.first() : "";
+  QgsDebugMsg( "ns = " + ns + " localName = " + localName );
+
+  ParseMode parseMode = modeStackTop();
+
+  if ( ns == GML_NAMESPACE && localName == "boundedBy" )
+  {
+    // gml:boundedBy in feature or feature collection -> skip
+    mSkipLevel = mLevel + 1;
+  }
+  // GML does not specify that gml:FeatureAssociationType elements should end
+  // with 'Member' apart standard gml:featureMember, but it is quite usual to
+  // that the names ends with 'Member', e.g.: osgb:topographicMember, cityMember,...
+  // so this is really fail if the name does not contain 'Member'
+  else if ( localName.endsWith( "member", Qt::CaseInsensitive ) )
+  {
+    mParseModeStack.push( QgsWFSData::featureMember );
+  }
+  // UMN Mapserver simple GetFeatureInfo response layer element (ends with _layer)
+  else if ( elementName.endsWith( "_layer" ) )
+  {
+    // do nothing, we catch _feature children
+  }
+  // UMN Mapserver simple GetFeatureInfo response feature element (ends with _feature)
+  // or featureMember children
+  else if ( elementName.endsWith( "_feature" )
+            || parseMode == QgsWFSData::featureMember )
+  {
+    //QgsDebugMsg ( "is feature path = " + path );
+    if ( mFeatureClassMap.count( localName ) == 0 )
+    {
+      mFeatureClassMap.insert( localName, QgsGmlFeatureClass( localName, path ) );
+    }
+    mCurrentFeatureName = localName;
+    mParseModeStack.push( QgsWFSData::feature );
+  }
+  else if ( parseMode == QgsWFSData::attribute && ns == GML_NAMESPACE && mGeometryNames.indexOf( localName ) >= 0 )
+  {
+    // Geometry (Point,MultiPoint,...) in geometry attribute
+    QStringList &geometryAttributes = mFeatureClassMap[mCurrentFeatureName].geometryAttributes();
+    if ( geometryAttributes.count( mAttributeName ) == 0 )
+    {
+      geometryAttributes.append( mAttributeName );
+    }
+    mSkipLevel = mLevel + 1; // no need to parse children
+  }
+  else if ( parseMode == QgsWFSData::feature )
+  {
+    // An element in feature should be ordinary or geometry attribute
+    //QgsDebugMsg( "is attribute");
+    mParseModeStack.push( QgsWFSData::attribute );
+    mAttributeName = localName;
+    mStringCash.clear();
+  }
+}
+
+void QgsWFSData::endElementSchema( const XML_Char* el )
+{
+  QString elementName( el );
+  QgsDebugMsg( QString( "<- %1 %2" ).arg( mLevel ).arg( elementName ) );
+
+  if ( mLevel >= mSkipLevel )
+  {
+    //QgsDebugMsg( QString("skip level %1").arg( mLevel ) );
+    mLevel--;
+    return;
+  }
+  else
+  {
+    // clear possible skip level
+    mSkipLevel = std::numeric_limits<int>::max();
+  }
+
+  QStringList splitName =  elementName.split( NS_SEPARATOR );
+  QString localName = splitName.last();
+  QString ns = splitName.size() > 1 ? splitName.first() : "";
+
+  QgsWFSData::ParseMode parseMode = modeStackTop();
+
+  if ( parseMode == QgsWFSData::attribute && localName == mAttributeName )
+  {
+    // End of attribute
+    //QgsDebugMsg("end attribute");
+    modeStackPop(); // go up to feature
+
+    if ( mFeatureClassMap[mCurrentFeatureName].geometryAttributes().count( mAttributeName ) == 0 )
+    {
+      // It is not geometry attribute -> analyze value
+      bool ok;
+      mStringCash.toInt( &ok );
+      QVariant::Type type = QVariant::String;
+      if ( ok )
+      {
+        type = QVariant::Int;
+      }
+      else
+      {
+        mStringCash.toDouble( &ok );
+        if ( ok )
+        {
+          type = QVariant::Double;
+        }
+      }
+      //QgsDebugMsg( "mStringCash = " + mStringCash + " type = " + QVariant::typeToName( type )  );
+      QMap<QString, QgsField> & fields = mFeatureClassMap[mCurrentFeatureName].fields();
+      if ( fields.count( mAttributeName ) == 0 )
+      {
+        QgsField field( mAttributeName, type );
+        fields.insert( mAttributeName, field );
+      }
+      else
+      {
+        QgsField &field = fields[mAttributeName];
+        // check if type is sufficient
+        if (( field.type() == QVariant::Int && ( type == QVariant::String || type == QVariant::Double ) ) ||
+            ( field.type() == QVariant::Double && type == QVariant::String ) )
+        {
+          field.setType( type );
+        }
+      }
+    }
+  }
+  else if ( ns == GML_NAMESPACE && localName == "boundedBy" )
+  {
+    // was skipped
+  }
+  else if ( localName.endsWith( "member", Qt::CaseInsensitive ) )
+  {
+    mParseModeStack.push( QgsWFSData::featureMember );
+    modeStackPop();
+  }
+  mParsePathStack.removeLast();
+  mLevel--;
+}
+
+void QgsWFSData::charactersSchema( const XML_Char* chars, int len )
+{
+  //QgsDebugMsg( QString("level %1 : %2").arg( mLevel ).arg( QString::fromUtf8( chars, len ) ) );
+  if ( mLevel >= mSkipLevel )
+  {
+    //QgsDebugMsg( QString("skip level %1").arg( mLevel ) );
+    return;
+  }
+
+  //save chars in mStringCash attribute mode for value type analysis
+  if ( modeStackTop() == QgsWFSData::attribute )
+  {
+    mStringCash.append( QString::fromUtf8( chars, len ) );
+  }
+}
+
+QStringList QgsWFSData::typeNames() const
+{
+  return mFeatureClassMap.keys();
+}
+
+QList<QgsField> QgsWFSData::fields( const QString & typeName )
+{
+  if ( mFeatureClassMap.count( typeName ) == 0 ) return QList<QgsField>();
+  return mFeatureClassMap[typeName].fields().values();
+}
+
+QStringList QgsWFSData::geometryAttributes( const QString & typeName )
+{
+  if ( mFeatureClassMap.count( typeName ) == 0 ) return QStringList();
+  return mFeatureClassMap[typeName].geometryAttributes();
 }

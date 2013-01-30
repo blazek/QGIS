@@ -21,6 +21,7 @@
 #include "qgsdataprovider.h"
 #include "qgsfeature.h"
 #include "qgsfield.h"
+#include "qgslogger.h"
 #include "qgspoint.h"
 #include <list>
 #include <set>
@@ -28,8 +29,56 @@
 #include <QPair>
 #include <QByteArray>
 #include <QDomElement>
+#include <QStringList>
+#include <QStack>
 class QgsRectangle;
 class QgsCoordinateReferenceSystem;
+
+/* Description of feature class in GML */
+class CORE_EXPORT QgsGmlFeatureClass
+{
+  public:
+    QgsGmlFeatureClass( );
+    QgsGmlFeatureClass( QString name, QString path );
+
+    //QgsGmlFeatureClass( const QgsGmlFeatureClass &fc );
+
+    ~QgsGmlFeatureClass();
+
+    void addField( const QgsField & field );
+
+    QMap<QString, QgsField> & fields() { return  mFieldMap; }
+    //QMap<QString, QgsField> fields() { return  mFieldMap; }
+
+    QString path() const { return mPath; }
+
+    //QString name () const { return mName; }
+
+    //QString elementName () const { return mElementName; }
+
+    QStringList & geometryAttributes() { return mGeometryAttributes; }
+
+    //void setGeometryAttribute( QString geometryAttribute ) { mGeometryAttribute = geometryAttribute; }
+
+
+
+  private:
+    /* Feature class name:
+     *  - element name without NS or known prefix/suffix (_feature)
+     *  - typeName attribute name */
+    QString mName;
+
+    //QString mElementName;
+
+    /* Dot separated path to element including the name */
+    QString mPath;
+
+    /* Fields map */
+    QMap<QString, QgsField> mFieldMap;
+
+    /* Geometry attribute */
+    QStringList mGeometryAttributes;
+};
 
 
 /**This class reads data from a WFS server or alternatively from a GML file. It uses the expat XML parser and an event based model to keep performance high. The parsing starts when the first data arrives, it does not wait until the request is finished*/
@@ -37,14 +86,8 @@ class CORE_EXPORT QgsWFSData: public QObject
 {
     Q_OBJECT
   public:
-    /** Constructor.
-       @param uri request uri
-       @param extent the extent of the WFS layer
-       @param features the features of the layer
-       @param idMap
-       @param geometryAttribute
-       @param thematicAttributes
-       @param wkbType */
+    QgsWFSData();
+
     QgsWFSData(
       const QString& uri,
       QgsRectangle* extent,
@@ -53,6 +96,8 @@ class CORE_EXPORT QgsWFSData: public QObject
       const QString& geometryAttribute,
       const QMap<QString, QPair<int, QgsField> >& thematicAttributes,
       QGis::WkbType* wkbType );
+
+
     ~QgsWFSData();
     /**Does the Http GET request to the wfs server
        @return 0 in case of success */
@@ -64,7 +109,23 @@ class CORE_EXPORT QgsWFSData: public QObject
     /** Get fields info from XSD */
     bool parseXSD( const QByteArray &xml );
 
+    /** Guess GML schema from data if XSD does not exist.
+      * Currently only recognizes UMN Mapserver GetFeatureInfo GML response.
+      * @param data GML data
+      * @return true in case of success */
+    bool getSchema( const QByteArray &data );
+
+    /** Get list of dot separated paths to feature classes parsed from GML or XSD */
+    QStringList typeNames() const;
+
+    /** Get map of fields parsed from XSD by parseXSD */
     QMap<int, QgsField> fields();
+
+    /** Get fields for type/class name parsed from GML or XSD */
+    QList<QgsField> fields( const QString & typeName );
+
+    /** Get list of geometry attributes for type/class name */
+    QStringList geometryAttributes( const QString & typeName );
 
   private slots:
     void setFinished();
@@ -83,10 +144,12 @@ class CORE_EXPORT QgsWFSData: public QObject
 
   private:
 
-    enum parseMode
+    enum ParseMode
     {
+      none,
       boundingBox,
-      featureMember,
+      featureMember, // gml:featureMember
+      feature,  // feature element containint attrs and geo (inside gml:featureMember)
       attribute,
       geometry,
       coordinate,
@@ -97,8 +160,6 @@ class CORE_EXPORT QgsWFSData: public QObject
       multiLine,
       multiPolygon
     };
-
-    QgsWFSData();
 
     /**XML handler methods*/
     void startElement( const XML_Char* el, const XML_Char** attr );
@@ -115,6 +176,23 @@ class CORE_EXPORT QgsWFSData: public QObject
     static void chars( void* data, const XML_Char* chars, int len )
     {
       static_cast<QgsWFSData*>( data )->characters( chars, len );
+    }
+
+    /**XML handler methods for guessing schema from data*/
+    void startElementSchema( const XML_Char* el, const XML_Char** attr );
+    void endElementSchema( const XML_Char* el );
+    void charactersSchema( const XML_Char* chars, int len );
+    static void startSchema( void* data, const XML_Char* el, const XML_Char** attr )
+    {
+      static_cast<QgsWFSData*>( data )->startElementSchema( el, attr );
+    }
+    static void endSchema( void* data, const XML_Char* el )
+    {
+      static_cast<QgsWFSData*>( data )->endElementSchema( el );
+    }
+    static void charsSchema( void* data, const XML_Char* chars, int len )
+    {
+      static_cast<QgsWFSData*>( data )->charactersSchema( chars, len );
     }
 
     //helper routines
@@ -155,14 +233,22 @@ class CORE_EXPORT QgsWFSData: public QObject
     does not provider extent information.*/
     void calculateExtentFromFeatures() const;
 
+    /** Get safely (if empty) top from mode stack */
+    ParseMode modeStackTop() { return mParseModeStack.isEmpty() ? none : mParseModeStack.top(); }
+
+    /** Safely (if empty) pop from mode stack */
+    ParseMode modeStackPop() { return mParseModeStack.isEmpty() ? none : mParseModeStack.pop(); }
+
     QString mUri;
     //results are members such that handler routines are able to manipulate them
     /**Bounding box of the layer*/
     QgsRectangle* mExtent;
     /**The features of the layer*/
-    QMap<QgsFeatureId, QgsFeature* > &mFeatures;
+    //QMap<QgsFeatureId, QgsFeature* > &mFeatures;
+    QMap<QgsFeatureId, QgsFeature* > mFeatures;
     /**Stores the relation between provider ids and WFS server ids*/
-    QMap<QgsFeatureId, QString > &mIdMap;
+    //QMap<QgsFeatureId, QString > &mIdMap;
+    QMap<QgsFeatureId, QString > mIdMap;
     /**Name of geometry attribute*/
     QString mGeometryAttribute;
     //const QMap<QString, QPair<int, QgsField> > &mThematicAttributes;
@@ -171,7 +257,8 @@ class CORE_EXPORT QgsWFSData: public QObject
     /**True if the request is finished*/
     bool mFinished;
     /**Keep track about the most important nested elements*/
-    std::stack<parseMode> mParseModeStack;
+    //std::stack<ParseMode> mParseModeStack;
+    QStack<ParseMode> mParseModeStack;
     /**This contains the character data if an important element has been encountered*/
     QString mStringCash;
     QgsFeature* mCurrentFeature;
@@ -193,6 +280,25 @@ class CORE_EXPORT QgsWFSData: public QObject
     QString mCoordinateSeparator;
     /**Tuple separator for coordinate strings. Usually " " */
     QString mTupleSeparator;
+
+    /* Schema informations guessed/parsed from GML in getSchema() */
+
+    /** Depth level, root element is 0 */
+    int mLevel;
+
+    /** Skip all levels under this */
+    int mSkipLevel;
+
+    /** Path to current level */
+    QStringList mParsePathStack;
+
+    QString mCurrentFeatureName;
+
+    // List of know geometries
+    QStringList mGeometryNames;
+
+    /* Feature classes map with element paths as keys */
+    QMap<QString, QgsGmlFeatureClass> mFeatureClassMap;
 };
 
 #endif
