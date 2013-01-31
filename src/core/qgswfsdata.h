@@ -79,23 +79,48 @@ class CORE_EXPORT QgsWFSData: public QObject
   public:
     QgsWFSData();
 
-    QgsWFSData(
-      const QString& uri,
-      QgsRectangle* extent,
-      QMap<QgsFeatureId, QgsFeature* > &features,
-      QMap<QgsFeatureId, QString > &idMap,
-      const QString& geometryAttribute,
-      const QMap<QString, QPair<int, QgsField> >& thematicAttributes,
-      QGis::WkbType* wkbType );
-
+    /*
+        QgsWFSData(
+          const QString& uri,
+          QgsRectangle* extent,
+          QMap<QgsFeatureId, QgsFeature* > &features,
+          QMap<QgsFeatureId, QString > &idMap,
+          const QString& geometryAttribute,
+          const QMap<QString, QPair<int, QgsField> >& thematicAttributes,
+          QGis::WkbType* wkbType );
+    */
 
     ~QgsWFSData();
+
+    void setAttributes( const QgsFieldMap & fieldMap );
+
+    /** Set feature type to be parsed */
+    //void setFeatureType ( const QString & typeName, const QString& geometryAttribute, const QMap<QString, QPair<int, QgsField> >& thematicAttributes );
+    void setFeatureType( const QString & typeName, const QString& geometryAttribute, const QgsFieldMap & fieldMap );
+
+    void clearParser();
+
     /**Does the Http GET request to the wfs server
-       @return 0 in case of success */
-    int getWFSData();
+       @param query string (to define the requested typename)
+       @param extent the extent of the WFS layer
+       @param srs the reference system of the layer
+       @param features the features of the layer
+    @return 0 in case of success*/
+    //int getWFSData();
+    int getWFSData( const QString& uri, QgsRectangle* extent, QGis::WkbType* wkbType );
 
     /** Read from give GML. Constructor uri param is ignored */
-    int getWFSData( const QByteArray &data );
+    int getWFSData( const QByteArray &data, QGis::WkbType* wkbType );
+
+    /** Get parsed features for given type name */
+    //QMap<QgsFeatureId, QgsFeature* > features( const QString & typeName ) const { return mFeatures.value(typeName); }
+    QMap<QgsFeatureId, QgsFeature* > featuresMap() const { return mFeatures; }
+    QList<QgsFeature*> features() const { return mFeatures.values(); }
+    QVector<QgsFeature*> featuresVector() const { return mFeatures.values().toVector(); }
+
+    /** Get feature ids map */
+    //QMap<QgsFeatureId, QString > idMap( const QString & typeName ) const { return mIdMap.value(typeName); }
+    QMap<QgsFeatureId, QString > idMap() const { return mIdMap; }
 
     /** Get fields info from XSD */
     bool parseXSD( const QByteArray &xml );
@@ -110,7 +135,7 @@ class CORE_EXPORT QgsWFSData: public QObject
     QStringList typeNames() const;
 
     /** Get map of fields parsed from XSD by parseXSD */
-    QMap<int, QgsField> fields();
+    //QMap<int, QgsField> fields();
 
     /** Get fields for type/class name parsed from GML or XSD */
     QList<QgsField> fields( const QString & typeName );
@@ -257,12 +282,15 @@ class CORE_EXPORT QgsWFSData: public QObject
     //results are members such that handler routines are able to manipulate them
     /**Bounding box of the layer*/
     QgsRectangle* mExtent;
-    /**The features of the layer*/
+    /**The features of the layer, map of feature maps for each feature type*/
     //QMap<QgsFeatureId, QgsFeature* > &mFeatures;
     QMap<QgsFeatureId, QgsFeature* > mFeatures;
+    //QMap<QString, QMap<QgsFeatureId, QgsFeature* > > mFeatures;
+
     /**Stores the relation between provider ids and WFS server ids*/
     //QMap<QgsFeatureId, QString > &mIdMap;
     QMap<QgsFeatureId, QString > mIdMap;
+    //QMap<QString, QMap<QgsFeatureId, QString > > mIdMap;
     /**Name of geometry attribute*/
     QString mGeometryAttribute;
     //const QMap<QString, QPair<int, QgsField> > &mThematicAttributes;
