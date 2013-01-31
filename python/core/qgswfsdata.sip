@@ -36,7 +36,7 @@ class QgsWFSData: QObject
       * Currently only recognizes UMN Mapserver GetFeatureInfo GML response.
       * @param data GML data
       * @return true in case of success */
-    bool getSchema( const QByteArray &data );
+    bool guessSchema( const QByteArray &data );
 
     QStringList typeNames() const;
 
