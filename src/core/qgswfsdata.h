@@ -41,26 +41,15 @@ class CORE_EXPORT QgsGmlFeatureClass
     QgsGmlFeatureClass( );
     QgsGmlFeatureClass( QString name, QString path );
 
-    //QgsGmlFeatureClass( const QgsGmlFeatureClass &fc );
-
     ~QgsGmlFeatureClass();
 
-    void addField( const QgsField & field );
+    QList<QgsField> & fields() { return  mFields; }
 
-    QMap<QString, QgsField> & fields() { return  mFieldMap; }
-    //QMap<QString, QgsField> fields() { return  mFieldMap; }
+    int fieldIndex( const QString & name );
 
     QString path() const { return mPath; }
 
-    //QString name () const { return mName; }
-
-    //QString elementName () const { return mElementName; }
-
     QStringList & geometryAttributes() { return mGeometryAttributes; }
-
-    //void setGeometryAttribute( QString geometryAttribute ) { mGeometryAttribute = geometryAttribute; }
-
-
 
   private:
     /* Feature class name:
@@ -73,8 +62,10 @@ class CORE_EXPORT QgsGmlFeatureClass
     /* Dot separated path to element including the name */
     QString mPath;
 
-    /* Fields map */
-    QMap<QString, QgsField> mFieldMap;
+    /* Fields */
+    // Do not use QMap to keep original fields order. If it gets to performance,
+    // add a field index map
+    QList<QgsField> mFields;
 
     /* Geometry attribute */
     QStringList mGeometryAttributes;
@@ -117,7 +108,7 @@ class CORE_EXPORT QgsWFSData: public QObject
       * Currently only recognizes UMN Mapserver GetFeatureInfo GML response.
       * @param data GML data
       * @return true in case of success */
-    bool getSchema( const QByteArray &data );
+    bool guessSchema( const QByteArray &data );
 
     /** Get list of dot separated paths to feature classes parsed from GML or XSD */
     QStringList typeNames() const;
@@ -137,8 +128,31 @@ class CORE_EXPORT QgsWFSData: public QObject
     /**Takes progress value and total steps and emit signals 'dataReadProgress' and 'totalStepUpdate'*/
     void handleProgressEvent( qint64 progress, qint64 totalSteps );
 
+    /* XSD parsing support methods */
+
+    /** Get dom elements by path */
     QList<QDomElement> domElements( const QDomElement &element, const QString & path );
+
+    /** Get dom element by path */
+    QDomElement domElement( const QDomElement &element, const QString & path );
+
+    /** Filter list of elements by attribute value */
+    QList<QDomElement> domElements( QList<QDomElement> &elements, const QString & attr, const QString & attrVal );
+
+    /** Get dom element by path and attribute value */
+    QDomElement domElement( const QDomElement &element, const QString & path, const QString & attr, const QString & attrVal );
+
+    /** Strip namespace from element name */
     QString stripNS( const QString & name );
+
+    /** Find GML base type for complex type of given name
+     * @param name complex type name
+     * @return name of GML base type without NS, e.g. AbstractFeatureType or empty string if not pased on GML type
+     */
+    QString xsdComplexTypeGmlBaseType( const QDomElement &element, const QString & name );
+
+    /** Get feature class information from complex type recursively */
+    bool xsdFeatureClass( const QDomElement &element, const QString & typeName, QgsGmlFeatureClass & featureClass );
 
   signals:
     void dataReadProgress( int progress );
@@ -297,8 +311,8 @@ class CORE_EXPORT QgsWFSData: public QObject
 
     QString mCurrentFeatureName;
 
-    // List of know geometries
-    QStringList mGeometryNames;
+    // List of know geometries (Point, Multipoint,...)
+    QStringList mGeometryTypes;
 
     /* Feature classes map with element paths as keys */
     QMap<QString, QgsGmlFeatureClass> mFeatureClassMap;

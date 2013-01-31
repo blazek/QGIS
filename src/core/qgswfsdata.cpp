@@ -46,17 +46,20 @@ QgsGmlFeatureClass::~QgsGmlFeatureClass()
 {
 }
 
-void QgsGmlFeatureClass::addField( const QgsField & field )
+int QgsGmlFeatureClass::fieldIndex( const QString & name )
 {
-  mFieldMap.insert( field.name(), field );
+  for ( int i = 0; i < mFields.size(); i++ )
+  {
+    if ( mFields[i].name() == name ) return i;
+  }
+  return -1;
 }
-
 
 // --------------------------- QgsWFSData -------------------------------
 QgsWFSData::QgsWFSData()
     : QObject()
 {
-  mGeometryNames << "Point" << "MultiPoint"
+  mGeometryTypes << "Point" << "MultiPoint"
   << "LineString" << "MultiLineString"
   << "Polygon" << "MultiPolygon";
 }
@@ -941,44 +944,171 @@ bool QgsWFSData::parseXSD( const QByteArray &xml )
 
   QDomElement docElem = dom.documentElement();
 
-  // TODO: test docElem.tagName()
+  QList<QDomElement> elementElements = domElements( docElem, "element" );
 
-  QList<QDomElement> elements = domElements( docElem, "complexType.complexContent.extension.sequence.element" );
+  //QgsDebugMsg( QString( "%1 elemets read" ).arg( elementElements.size() ) );
 
-  QgsDebugMsg( QString( "%1 elemets read" ).arg( elements.size() ) );
-
-  // Supported geometry types
-  QStringList geometryTypes;
-  geometryTypes << "Point" << "MultiPoint"
-  << "LineString" << "MultiLineString"
-  << "Polygon" << "MultiPolygon";
-
-  for ( int i = 0; i < geometryTypes.size(); i++ )
+  foreach ( QDomElement elementElement, elementElements )
   {
-    geometryTypes[i] = "gml:" + geometryTypes.value( i ) + "PropertyType";
+    QString name = elementElement.attribute( "name" );
+    QString type = elementElement.attribute( "type" );
+
+    QString gmlBaseType = xsdComplexTypeGmlBaseType( docElem, stripNS( type ) );
+    //QgsDebugMsg( QString( "gmlBaseType = %1" ).arg( gmlBaseType ) );
+    //QgsDebugMsg( QString( "name = %1 gmlBaseType = %2" ).arg( name ).arg( gmlBaseType ) );
+    // We should only use gml:AbstractFeatureType descendants which have
+    // ancestor listed in gml:FeatureAssociationType (featureMember) descendant
+    // But we could only loose some data if XSD was not correct, I think.
+
+    if ( gmlBaseType == "AbstractFeatureType" )
+    {
+      // Get feature type definition
+      QgsGmlFeatureClass featureClass( name, "" );
+      xsdFeatureClass( docElem, stripNS( type ), featureClass );
+      mFeatureClassMap.insert( name, featureClass );
+    }
+    // A feature may have more geometries, we take just the first one
   }
 
-  int count = 0;
-  foreach ( QDomElement el, elements )
-  {
-    QString name = el.attribute( "name" );
-    QString type = el.attribute( "type" );
-    QgsDebugMsg( QString( "name = %1 type = %2" ).arg( name ).arg( type ) );
+  return true;
+}
 
-    // A feature may have more geometries, we take just the first one
-    if ( mGeometryAttribute.isEmpty() && geometryTypes.contains( type ) )
+bool QgsWFSData::xsdFeatureClass( const QDomElement &element, const QString & typeName, QgsGmlFeatureClass & featureClass )
+{
+  //QgsDebugMsg("typeName = " + typeName );
+  QDomElement complexTypeElement = domElement( element, "complexType", "name", typeName );
+  if ( complexTypeElement.isNull() ) return false;
+
+  // extension or restriction
+  QDomElement extrest = domElement( complexTypeElement, "complexContent.extension" );
+  if ( extrest.isNull() )
+  {
+    extrest = domElement( complexTypeElement, "complexContent.restriction" );
+  }
+  if ( extrest.isNull() ) return false;
+
+  QString extrestName = extrest.attribute( "base" );
+  if ( extrestName == "gml:AbstractFeatureType" )
+  {
+    // In theory we should add gml:AbstractFeatureType default attributes gml:description
+    // and gml:name but it does not seem to be a common practice and we would probably
+    // confuse most users
+  }
+  else
+  {
+    // Get attributes from extrest
+    if ( !xsdFeatureClass( element, stripNS( extrestName ), featureClass ) ) return false;
+  }
+
+  // Supported geometry types
+  QStringList geometryPropertyTypes;
+  foreach ( QString geom, mGeometryTypes )
+  {
+    geometryPropertyTypes << geom + "PropertyType";
+  }
+
+  QStringList geometryAliases;
+  geometryAliases << "location" << "centerOf" << "position" << "extentOf"
+  << "coverage" << "edgeOf" << "centerLineOf" << "multiLocation"
+  << "multiCenterOf" << "multiPosition" << "multiCenterLineOf"
+  << "multiEdgeOf" << "multiCoverage" << "multiExtentOf";
+
+  // Add attributes from current comple type
+  QList<QDomElement> sequenceElements = domElements( extrest, "sequence.element" );
+  foreach ( QDomElement sequenceElement, sequenceElements )
+  {
+    QString fieldName = sequenceElement.attribute( "name" );
+    QString fieldTypeName = stripNS( sequenceElement.attribute( "type" ) );
+    QString ref = sequenceElement.attribute( "ref" );
+    //QgsDebugMsg ( QString("fieldName = %1 fieldTypeName = %2 ref = %3").arg(fieldName).arg(fieldTypeName).arg(ref) );
+
+    if ( !ref.isEmpty() )
     {
-      mGeometryAttribute = name;
+      if ( ref.startsWith( "gml:" ) )
+      {
+        if ( geometryAliases.contains( stripNS( ref ) ) )
+        {
+          featureClass.geometryAttributes().append( stripNS( ref ) );
+        }
+        else
+        {
+          QgsDebugMsg( QString( "Unknown referenced GML element: %1" ).arg( ref ) );
+        }
+      }
+      else
+      {
+        // TODO: get type from referenced element
+        QgsDebugMsg( QString( "field %1.%2 is referencing %3 - not supported" ).arg( typeName ).arg( fieldName ) );
+      }
       continue;
     }
 
-    QgsField field( name, QVariant::String, "text" );
-    mThematicAttributes.insert( name, qMakePair( count, field ) );
-    count++;
+    if ( fieldName.isEmpty() )
+    {
+      QgsDebugMsg( QString( "field in %1 without name" ).arg( typeName ) );
+      continue;
+    }
+
+    // type is either type attribute
+    if ( fieldTypeName.isEmpty() )
+    {
+      // or type is inheriting from xs:simpleType
+      QDomElement sequenceElementRestriction = domElement( sequenceElement, "simpleType.restriction" );
+      fieldTypeName = stripNS( sequenceElementRestriction.attribute( "base" ) );
+    }
+
+    QVariant::Type fieldType = QVariant::String;
+    if ( fieldTypeName.isEmpty() )
+    {
+      QgsDebugMsg( QString( "Cannot get %1.%2 field type" ).arg( typeName ).arg( fieldName ) );
+    }
+    else
+    {
+      if ( geometryPropertyTypes.contains( fieldTypeName ) )
+      {
+        // Geometry attribute
+        featureClass.geometryAttributes().append( fieldName );
+        continue;
+      }
+
+      if ( fieldTypeName == "decimal" )
+      {
+        fieldType = QVariant::Double;
+      }
+      else if ( fieldTypeName == "integer" )
+      {
+        fieldType = QVariant::Int;
+      }
+    }
+
+    QgsField field( fieldName, fieldType );
+    featureClass.fields().append( field );
   }
-  QgsDebugMsg( "mGeometryAttribute = " + mGeometryAttribute );
 
   return true;
+}
+
+QString QgsWFSData::xsdComplexTypeGmlBaseType( const QDomElement &element, const QString & name )
+{
+  //QgsDebugMsg("name = " + name );
+  QDomElement complexTypeElement = domElement( element, "complexType", "name", name );
+  if ( complexTypeElement.isNull() ) return "";
+
+  QDomElement extrest = domElement( complexTypeElement, "complexContent.extension" );
+  if ( extrest.isNull() )
+  {
+    extrest = domElement( complexTypeElement, "complexContent.restriction" );
+  }
+  if ( extrest.isNull() ) return "";
+
+  QString extrestName = extrest.attribute( "base" );
+  if ( extrestName.startsWith( "gml:" ) )
+  {
+    // GML base type found
+    return stripNS( extrestName );
+  }
+  // Continue recursively until GML base type is reached
+  return xsdComplexTypeGmlBaseType( element, stripNS( extrestName ) );
 }
 
 QString QgsWFSData::stripNS( const QString & name )
@@ -1020,6 +1150,30 @@ QList<QDomElement> QgsWFSData::domElements( const QDomElement &element, const QS
   return list;
 }
 
+QDomElement QgsWFSData::domElement( const QDomElement &element, const QString & path )
+{
+  return domElements( element, path ).value( 0 );
+}
+
+QList<QDomElement> QgsWFSData::domElements( QList<QDomElement> &elements, const QString & attr, const QString & attrVal )
+{
+  QList<QDomElement> list;
+  foreach ( QDomElement el, elements )
+  {
+    if ( el.attribute( attr ) == attrVal )
+    {
+      list << el;
+    }
+  }
+  return list;
+}
+
+QDomElement QgsWFSData::domElement( const QDomElement &element, const QString & path, const QString & attr, const QString & attrVal )
+{
+  QList<QDomElement> list = domElements( element, path );
+  return domElements( list, attr, attrVal ).value( 0 );
+}
+
 QMap<int, QgsField> QgsWFSData::fields()
 {
   QMap<int, QgsField>fields;
@@ -1031,7 +1185,7 @@ QMap<int, QgsField> QgsWFSData::fields()
   return fields;
 }
 
-bool QgsWFSData::getSchema( const QByteArray &data )
+bool QgsWFSData::guessSchema( const QByteArray &data )
 {
   QgsDebugMsg( "Entered" );
   mLevel = 0;
@@ -1050,7 +1204,7 @@ void QgsWFSData::startElementSchema( const XML_Char* el, const XML_Char** attr )
   mLevel++;
 
   QString elementName( el );
-  QgsDebugMsg( QString( "-> %1 %2 %3" ).arg( mLevel ).arg( elementName ).arg( mLevel >= mSkipLevel ? "skip" : "" ) );
+  //QgsDebugMsgLevel( QString( "-> %1 %2 %3" ).arg( mLevel ).arg( elementName ).arg( mLevel >= mSkipLevel ? "skip" : "" ), 5 );
 
   if ( mLevel >= mSkipLevel )
   {
@@ -1064,7 +1218,7 @@ void QgsWFSData::startElementSchema( const XML_Char* el, const XML_Char** attr )
   QStringList splitName =  elementName.split( NS_SEPARATOR );
   QString localName = splitName.last();
   QString ns = splitName.size() > 1 ? splitName.first() : "";
-  QgsDebugMsg( "ns = " + ns + " localName = " + localName );
+  //QgsDebugMsg( "ns = " + ns + " localName = " + localName );
 
   ParseMode parseMode = modeStackTop();
 
@@ -1099,7 +1253,7 @@ void QgsWFSData::startElementSchema( const XML_Char* el, const XML_Char** attr )
     mCurrentFeatureName = localName;
     mParseModeStack.push( QgsWFSData::feature );
   }
-  else if ( parseMode == QgsWFSData::attribute && ns == GML_NAMESPACE && mGeometryNames.indexOf( localName ) >= 0 )
+  else if ( parseMode == QgsWFSData::attribute && ns == GML_NAMESPACE && mGeometryTypes.indexOf( localName ) >= 0 )
   {
     // Geometry (Point,MultiPoint,...) in geometry attribute
     QStringList &geometryAttributes = mFeatureClassMap[mCurrentFeatureName].geometryAttributes();
@@ -1122,7 +1276,7 @@ void QgsWFSData::startElementSchema( const XML_Char* el, const XML_Char** attr )
 void QgsWFSData::endElementSchema( const XML_Char* el )
 {
   QString elementName( el );
-  QgsDebugMsg( QString( "<- %1 %2" ).arg( mLevel ).arg( elementName ) );
+  //QgsDebugMsgLevel( QString( "<- %1 %2" ).arg( mLevel ).arg( elementName ),5 );
 
   if ( mLevel >= mSkipLevel )
   {
@@ -1167,15 +1321,17 @@ void QgsWFSData::endElementSchema( const XML_Char* el )
         }
       }
       //QgsDebugMsg( "mStringCash = " + mStringCash + " type = " + QVariant::typeToName( type )  );
-      QMap<QString, QgsField> & fields = mFeatureClassMap[mCurrentFeatureName].fields();
-      if ( fields.count( mAttributeName ) == 0 )
+      //QMap<QString, QgsField> & fields = mFeatureClassMap[mCurrentFeatureName].fields();
+      QList<QgsField> & fields = mFeatureClassMap[mCurrentFeatureName].fields();
+      int fieldIndex = mFeatureClassMap[mCurrentFeatureName].fieldIndex( mAttributeName );
+      if ( fieldIndex == -1 )
       {
         QgsField field( mAttributeName, type );
-        fields.insert( mAttributeName, field );
+        fields.append( field );
       }
       else
       {
-        QgsField &field = fields[mAttributeName];
+        QgsField &field = fields[fieldIndex];
         // check if type is sufficient
         if (( field.type() == QVariant::Int && ( type == QVariant::String || type == QVariant::Double ) ) ||
             ( field.type() == QVariant::Double && type == QVariant::String ) )
@@ -1222,7 +1378,7 @@ QStringList QgsWFSData::typeNames() const
 QList<QgsField> QgsWFSData::fields( const QString & typeName )
 {
   if ( mFeatureClassMap.count( typeName ) == 0 ) return QList<QgsField>();
-  return mFeatureClassMap[typeName].fields().values();
+  return mFeatureClassMap[typeName].fields();
 }
 
 QStringList QgsWFSData::geometryAttributes( const QString & typeName )
