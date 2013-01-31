@@ -58,12 +58,18 @@ int QgsGmlFeatureClass::fieldIndex( const QString & name )
 // --------------------------- QgsWFSData -------------------------------
 QgsWFSData::QgsWFSData()
     : QObject()
+    , mExtent( 0 )
+    , mFinished( false )
+    , mFeatureCount( 0 )
 {
   mGeometryTypes << "Point" << "MultiPoint"
   << "LineString" << "MultiLineString"
   << "Polygon" << "MultiPolygon";
+
+  mEndian = QgsApplication::endian();
 }
 
+#if 0
 QgsWFSData::QgsWFSData(
   const QString& uri,
   QgsRectangle* extent,
@@ -75,7 +81,7 @@ QgsWFSData::QgsWFSData(
     : QObject(),
     mUri( uri ),
     mExtent( extent ),
-    mFeatures( features ),
+    //mFeatures( features ),
     mIdMap( idMap ),
     mGeometryAttribute( geometryAttribute ),
     mThematicAttributes( thematicAttributes ),
@@ -103,14 +109,45 @@ QgsWFSData::QgsWFSData(
 
   mEndian = QgsApplication::endian();
 }
+#endif
 
 QgsWFSData::~QgsWFSData()
 {
 
 }
 
-int QgsWFSData::getWFSData()
+void QgsWFSData::setAttributes( const QgsFieldMap & fieldMap )
 {
+  mThematicAttributes.clear();
+  foreach ( int i, fieldMap.keys() )
+  {
+    mThematicAttributes.insert( fieldMap.value( i ).name(), qMakePair( i, fieldMap.value( i ) ) );
+  }
+}
+
+//void QgsWFSData::setFeatureType ( const QString & typeName, const QString& geometryAttribute, const QMap<QString, QPair<int, QgsField> >& thematicAttributes )
+void QgsWFSData::setFeatureType( const QString & typeName, const QString& geometryAttribute, const QgsFieldMap & fieldMap )
+{
+  mTypeName = typeName;
+  mGeometryAttribute = geometryAttribute;
+  setAttributes( fieldMap );
+}
+
+void QgsWFSData::clearParser()
+{
+  mParseModeStack.clear();
+  mLevel = 0;
+  mSkipLevel = 0;
+  mParsePathStack.clear();
+}
+
+//int QgsWFSData::getWFSData()
+int QgsWFSData::getWFSData( const QString& uri, QgsRectangle* extent, QGis::WkbType* wkbType )
+{
+  mUri = uri;
+  mExtent = extent;
+  mWkbType = wkbType;
+
   XML_Parser p = XML_ParserCreateNS( NULL, NS_SEPARATOR );
   XML_SetUserData( p, this );
   XML_SetElementHandler( p, QgsWFSData::start, QgsWFSData::end );
@@ -174,9 +211,11 @@ int QgsWFSData::getWFSData()
   return 0;
 }
 
-int QgsWFSData::getWFSData( const QByteArray &data )
+int QgsWFSData::getWFSData( const QByteArray &data, QGis::WkbType* wkbType )
 {
   QgsDebugMsg( "Entered" );
+  mWkbType = wkbType;
+  clearParser();
   if ( mExtent )
   {
     mExtent->set( 0, 0, 0, 0 );
@@ -209,7 +248,12 @@ void QgsWFSData::handleProgressEvent( qint64 progress, qint64 totalSteps )
 void QgsWFSData::startElement( const XML_Char* el, const XML_Char** attr )
 {
   QString elementName( el );
-  QString localName = elementName.section( NS_SEPARATOR, 1, 1 );
+  //QgsDebugMsg( QString( "-> %1 %2 %3" ).arg( mLevel ).arg( elementName ).arg( mLevel >= mSkipLevel ? "skip" : "" ) );
+  //QString localName = elementName.section( NS_SEPARATOR, 1, 1 );
+  QStringList splitName =  elementName.split( NS_SEPARATOR );
+  QString localName = splitName.last();
+  QString ns = splitName.size() > 1 ? splitName.first() : "";
+  //QgsDebugMsg( "ns = " + ns + " localName = " + localName );
   if ( elementName == GML_NAMESPACE + NS_SEPARATOR + "coordinates" )
   {
     mParseModeStack.push( QgsWFSData::coordinate );
@@ -235,11 +279,14 @@ void QgsWFSData::startElement( const XML_Char* el, const XML_Char** attr )
   }
   else if ( elementName == GML_NAMESPACE + NS_SEPARATOR + "featureMember" )
   {
-    mCurrentFeature = new QgsFeature( mFeatureCount );
-    mParseModeStack.push( QgsWFSData::featureMember );
+    //mCurrentFeature = new QgsFeature( mFeatureCount );
+    //mParseModeStack.push( QgsWFSData::featureMember );
   }
   else if ( localName == mTypeName )
   {
+    //QgsDebugMsg("found element " + localName );
+    mCurrentFeature = new QgsFeature( mFeatureCount );
+    mParseModeStack.push( QgsWFSData::featureMember );
     mCurrentFeatureId = readAttribute( "fid", attr );
   }
   else if ( elementName == GML_NAMESPACE + NS_SEPARATOR + "Box" && mParseModeStack.top() == QgsWFSData::boundingBox )
@@ -283,16 +330,26 @@ void QgsWFSData::startElement( const XML_Char* el, const XML_Char** attr )
 
   else if ( mParseModeStack.size() == 1 && mParseModeStack.top() == QgsWFSData::featureMember && mThematicAttributes.find( localName ) != mThematicAttributes.end() )
   {
+    //QgsDebugMsg("is attribute");
     mParseModeStack.push( QgsWFSData::attribute );
     mAttributeName = localName;
     mStringCash.clear();
+  }
+  else
+  {
+    //QgsDebugMsg( QString("localName = %1 not interpreted").arg(localName) );
+    //QgsDebugMsg( QString("mParseModeStack.size() = %1 mThematicAttributes.count(localName) = %2").arg( mParseModeStack.size() ).arg(mThematicAttributes.count(localName)) );
   }
 }
 
 void QgsWFSData::endElement( const XML_Char* el )
 {
   QString elementName( el );
-  QString localName = elementName.section( NS_SEPARATOR, 1, 1 );
+  //QString localName = elementName.section( NS_SEPARATOR, 1, 1 );
+  QStringList splitName =  elementName.split( NS_SEPARATOR );
+  QString localName = splitName.last();
+  QString ns = splitName.size() > 1 ? splitName.first() : "";
+  //QgsDebugMsg( "ns = " + ns + " localName = " + localName );
   if ( elementName == GML_NAMESPACE + NS_SEPARATOR + "coordinates" )
   {
     if ( !mParseModeStack.empty() )
@@ -350,7 +407,8 @@ void QgsWFSData::endElement( const XML_Char* el )
       mParseModeStack.pop();
     }
   }
-  else if ( elementName == GML_NAMESPACE + NS_SEPARATOR + "featureMember" )
+  //else if ( elementName == GML_NAMESPACE + NS_SEPARATOR + "featureMember" )
+  else if ( localName == mTypeName )
   {
     //MH090531: Check if all feature attributes are initialised, sometimes attribute values are missing.
     //We fill the not initialized ones with empty strings, otherwise the feature cannot be exported to shp later
@@ -1174,6 +1232,7 @@ QDomElement QgsWFSData::domElement( const QDomElement &element, const QString & 
   return domElements( list, attr, attrVal ).value( 0 );
 }
 
+#if 0
 QMap<int, QgsField> QgsWFSData::fields()
 {
   QMap<int, QgsField>fields;
@@ -1184,6 +1243,7 @@ QMap<int, QgsField> QgsWFSData::fields()
   }
   return fields;
 }
+#endif
 
 bool QgsWFSData::guessSchema( const QByteArray &data )
 {
@@ -1204,7 +1264,7 @@ void QgsWFSData::startElementSchema( const XML_Char* el, const XML_Char** attr )
   mLevel++;
 
   QString elementName( el );
-  //QgsDebugMsgLevel( QString( "-> %1 %2 %3" ).arg( mLevel ).arg( elementName ).arg( mLevel >= mSkipLevel ? "skip" : "" ), 5 );
+  QgsDebugMsgLevel( QString( "-> %1 %2 %3" ).arg( mLevel ).arg( elementName ).arg( mLevel >= mSkipLevel ? "skip" : "" ), 5 );
 
   if ( mLevel >= mSkipLevel )
   {
@@ -1276,7 +1336,7 @@ void QgsWFSData::startElementSchema( const XML_Char* el, const XML_Char** attr )
 void QgsWFSData::endElementSchema( const XML_Char* el )
 {
   QString elementName( el );
-  //QgsDebugMsgLevel( QString( "<- %1 %2" ).arg( mLevel ).arg( elementName ),5 );
+  QgsDebugMsgLevel( QString( "<- %1 %2" ).arg( mLevel ).arg( elementName ), 5 );
 
   if ( mLevel >= mSkipLevel )
   {

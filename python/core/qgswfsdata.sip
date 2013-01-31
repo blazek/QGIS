@@ -1,3 +1,5 @@
+typedef QMap<int, QgsField> QgsFieldMap;
+
 class QgsWFSData: QObject 
 {
 
@@ -18,16 +20,25 @@ class QgsWFSData: QObject
     */
     QgsWFSData();
     ~QgsWFSData();
+
+    //void setFeatureType ( const QString & typeName, const QString& geometryAttribute, const QMap<QString, QPair<int, QgsField> >& thematicAttributes );
+    void setFeatureType ( const QString & typeName, const QString& geometryAttribute, const QgsFieldMap & thematicAttributes );
+
+
     /**Does the Http GET request to the wfs server
        @param query string (to define the requested typename)
        @param extent the extent of the WFS layer
        @param srs the reference system of the layer
        @param features the features of the layer
     @return 0 in case of success*/
-    int getWFSData();
+    //int getWFSData();
 
     /** Read from give GML. Constructor uri param is ignored */
-    int getWFSData( const QByteArray &data );
+    int getWFSData( const QByteArray &data, QGis::WkbType* wkbType );
+
+    //QMap<QgsFeatureId, QgsFeature* > featuresMap() const;
+    //QList<QgsFeature*> features() const;
+    QVector<QgsFeature*> featuresVector() const;
 
     /** Get fields info from XSD */
     bool parseXSD( const QByteArray &xml );
@@ -40,7 +51,7 @@ class QgsWFSData: QObject
 
     QStringList typeNames() const;
 
-    QMap<int, QgsField> fields();
+    //QMap<int, QgsField> fields();
 
     QList<QgsField> fields( const QString & typeName );
 

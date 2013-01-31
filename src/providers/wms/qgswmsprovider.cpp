@@ -4002,10 +4002,12 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
       //    OGC specification.
 
 
+      int gmlPart = -1;
+      int xsdPart = -1;
       if ( mIdentifyResultBodies.size() == 1 )
       {
         QgsDebugMsg( "Simple GML" );
-        continue; // not yet supported
+        gmlPart = 0;
       }
       else if ( mIdentifyResultBodies.size() == 2 ) // GML+XSD
       {
@@ -4014,42 +4016,73 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
         // Content-Type: application/binary
         // different are Content-Disposition but it is not reliable.
         // We could analyze begining of bodies...
-        int gmlPart = 0;
-        int xsdPart = 1;
-
-        QgsDebugMsg( "GML (first 2000 bytes):\n" + QString::fromUtf8( mIdentifyResultBodies.value( gmlPart ).left( 2000 ) ) );
-        QgsRectangle extent;
-        QMap<QgsFeatureId, QgsFeature* > features;
-        QMap<QgsFeatureId, QString > idMap;
-        QString geometryAttribute; // ???
-        QMap<QString, QPair<int, QgsField> > thematicAttributes; // ???
-        QGis::WkbType wkbType;
-        QString uri;
-        QgsWFSData dataReader( uri, &extent, features, idMap, geometryAttribute, thematicAttributes, &wkbType );
-        // parse XSD
-        //dataReader.parseXSD( mIdentifyResultXsd.toAscii() );
-        dataReader.parseXSD( mIdentifyResultBodies.value( xsdPart ) );
-
-        // TODO: avoid converting to string and back
-        int ret = dataReader.getWFSData( mIdentifyResultBodies.value( gmlPart ) );
-        QgsDebugMsg( QString( "parsing result = %1" ).arg( ret ) );
-        QgsFieldMap fields = dataReader.fields();
-
-        QgsRasterFeatureList featureList;
-        foreach ( QgsFeatureId id, features.keys() )
-        {
-          QgsFeature * feature = features.value( id );
-          QgsDebugMsg( QString( "feature id = %1" ).arg( id ) );
-
-          QgsRasterFeature rasterFeature = QgsRasterFeature( *feature, fields );
-          featureList.append( rasterFeature );
-        }
-        results.insert( count, qVariantFromValue( featureList ) );
+        gmlPart = 0;
+        xsdPart = 1;
       }
       else
       {
         QgsDebugMsg( QString( "%1 parts in multipart response not supported" ).arg( mIdentifyResultBodies.size() ) );
         continue;
+      }
+
+      QgsDebugMsg( "GML (first 2000 bytes):\n" + QString::fromUtf8( mIdentifyResultBodies.value( gmlPart ).left( 2000 ) ) );
+      QgsRectangle extent;
+      //QMap<QgsFeatureId, QgsFeature* > features;
+      //QMap<QgsFeatureId, QString > idMap;
+      //QString geometryAttribute;
+      //QMap<QString, QPair<int, QgsField> > thematicAttributes;
+      QGis::WkbType wkbType;
+      //QString uri;
+      //QgsWFSData dataReader( uri, &extent, features, idMap, geometryAttribute, thematicAttributes, &wkbType );
+      QgsWFSData dataReader;
+
+      if ( xsdPart >= 0 )  // XSD available
+      {
+        dataReader.parseXSD( mIdentifyResultBodies.value( xsdPart ) );
+      }
+      else
+      {
+        // guess from GML
+        dataReader.guessSchema( mIdentifyResultBodies.value( gmlPart ) );
+      }
+
+      //QgsFieldMap fields = dataReader.fields();
+      QStringList featureTypeNames = dataReader.typeNames();
+      QgsDebugMsg( QString( "%1 featureTypeNames found" ).arg( featureTypeNames.size() ) );
+
+      foreach ( QString featureTypeName, featureTypeNames )
+      {
+        QgsDebugMsg( QString( "featureTypeName = %1" ).arg( featureTypeName ) );
+
+        QString geometryAttribute = dataReader.geometryAttributes( featureTypeName ).value( 0 );
+        QList<QgsField> fields = dataReader.fields( featureTypeName );
+        QgsDebugMsg( QString( "%1 fields found" ).arg( fields.size() ) );
+        QgsFieldMap fieldMap;
+        //QMap<QString, QPair<int, QgsField> > thematicAttributes;
+        for ( int i; i < fields.size(); i++ )
+        {
+          //thematicAttributes.insert( fields[i].name(), qMakePair( i, fields[i] ) );
+          fieldMap.insert( i, fields[i] );
+        }
+        dataReader.setFeatureType( featureTypeName, geometryAttribute, fieldMap );
+        // TODO: avoid converting to string and back
+        //int ret = dataReader.getWFSData( mIdentifyResultBodies.value( gmlPart ), &wkbType );
+        int ret = dataReader.getWFSData( mIdentifyResultBodies.value( gmlPart ), &wkbType );
+        QgsDebugMsg( QString( "parsing result = %1" ).arg( ret ) );
+
+        QMap<QgsFeatureId, QgsFeature* > features = dataReader.featuresMap();
+        QgsDebugMsg( QString( "%1 features read" ).arg( features.size() ) );
+        QgsRasterFeatureList featureList;
+        foreach ( QgsFeatureId id, features.keys() )
+        {
+          QgsFeature * feature = features.value( id );
+
+          QgsDebugMsg( QString( "feature id = %1 : %2 attributes" ).arg( id ).arg( feature->attributeMap().size() ) );
+
+          QgsRasterFeature rasterFeature = QgsRasterFeature( *feature, fieldMap );
+          featureList.append( rasterFeature );
+        }
+        results.insert( count, qVariantFromValue( featureList ) );
       }
     }
     count++;
