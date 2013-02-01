@@ -39,50 +39,27 @@ class CORE_EXPORT QgsGml: public QObject
 {
     Q_OBJECT
   public:
-    QgsGml();
-
-    /*
-        QgsGml(
-          const QString& uri,
-          QgsRectangle* extent,
-          QMap<QgsFeatureId, QgsFeature* > &features,
-          QMap<QgsFeatureId, QString > &idMap,
-          const QString& geometryAttribute,
-          const QMap<QString, QPair<int, QgsField> >& thematicAttributes,
-          QGis::WkbType* wkbType );
-    */
+    QgsGml(
+      const QString& typeName,
+      const QString& geometryAttribute,
+      const QgsFields & fields );
 
     ~QgsGml();
 
-    void setAttributes( const QgsFields & fields );
+    /** Does the Http GET request to the wfs server
+     *  @param uri GML URL
+     *  @return 0 in case of success
+     */
+    int getFeatures( const QString& uri, QGis::WkbType* wkbType, QgsRectangle* extent = 0 );
 
-    /** Set feature type to be parsed */
-    //void setFeatureType ( const QString & typeName, const QString& geometryAttribute, const QMap<QString, QPair<int, QgsField> >& thematicAttributes );
-    //void setFeatureType( const QString & typeName, const QString& geometryAttribute, const QgsFieldMap & fieldMap );
-    void setFeatureType( const QString & typeName, const QString& geometryAttribute, const QgsFields & fields );
-
-
-    /**Does the Http GET request to the wfs server
-       @param query string (to define the requested typename)
-       @param extent the extent of the WFS layer
-       @param srs the reference system of the layer
-       @param features the features of the layer
-    @return 0 in case of success*/
-    //int getWFSData();
-    int getWFSData( const QString& uri, QgsRectangle* extent, QGis::WkbType* wkbType );
-
-    /** Read from give GML. Constructor uri param is ignored */
-    int getWFSData( const QByteArray &data, QGis::WkbType* wkbType );
+    /** Read from GML data. Constructor uri param is ignored */
+    int getFeatures( const QByteArray &data, QGis::WkbType* wkbType, QgsRectangle* extent = 0 );
 
     /** Get parsed features for given type name */
-    //QMap<QgsFeatureId, QgsFeature* > features( const QString & typeName ) const { return mFeatures.value(typeName); }
     QMap<QgsFeatureId, QgsFeature* > featuresMap() const { return mFeatures; }
-    QList<QgsFeature*> features() const { return mFeatures.values(); }
-    QVector<QgsFeature*> featuresVector() const { return mFeatures.values().toVector(); }
 
     /** Get feature ids map */
-    //QMap<QgsFeatureId, QString > idMap( const QString & typeName ) const { return mIdMap.value(typeName); }
-    QMap<QgsFeatureId, QString > idMap() const { return mIdMap; }
+    QMap<QgsFeatureId, QString > idsMap() const { return mIdMap; }
 
   private slots:
 
@@ -103,7 +80,7 @@ class CORE_EXPORT QgsGml: public QObject
     {
       none,
       boundingBox,
-      featureMember, // gml:featureMember
+      //featureMember, // gml:featureMember
       feature,  // feature element containint attrs and geo (inside gml:featureMember)
       attribute,
       geometry,
@@ -134,7 +111,6 @@ class CORE_EXPORT QgsGml: public QObject
     }
 
     //helper routines
-    void clearParser();
 
     /**Reads attribute srsName="EpsgCrsId:..."
        @param epsgNr result
@@ -179,6 +155,7 @@ class CORE_EXPORT QgsGml: public QObject
     /** Safely (if empty) pop from mode stack */
     ParseMode modeStackPop() { return mParseModeStack.isEmpty() ? none : mParseModeStack.pop(); }
 
+    QString mTypeName;
     QString mUri;
     //results are members such that handler routines are able to manipulate them
     /**Bounding box of the layer*/
@@ -217,7 +194,6 @@ class CORE_EXPORT QgsGml: public QObject
     /**Similar to mCurrentWKB, but only the size*/
     std::list< std::list<int> > mCurrentWKBFragmentSizes;
     QString mAttributeName;
-    QString mTypeName;
     QgsApplication::endian_t mEndian;
     /**Coordinate separator for coordinate strings. Usually "," */
     QString mCoordinateSeparator;

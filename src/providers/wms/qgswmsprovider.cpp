@@ -4080,11 +4080,11 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
         {
           fields.append( fieldList[i] );
         }
-        QgsGml gml;
-        gml.setFeatureType( featureTypeName, geometryAttribute, fields );
+        QgsGml gml( featureTypeName, geometryAttribute, fields );
         // TODO: avoid converting to string and back
         //int ret = dataReader.getWFSData( mIdentifyResultBodies.value( gmlPart ), &wkbType );
-        int ret = gml.getWFSData( mIdentifyResultBodies.value( gmlPart ), &wkbType );
+        //int ret = gml.getWFSData( mIdentifyResultBodies.value( gmlPart ), &wkbType );
+        int ret = gml.getFeatures( mIdentifyResultBodies.value( gmlPart ), &wkbType );
         QgsDebugMsg( QString( "parsing result = %1" ).arg( ret ) );
 
         QMap<QgsFeatureId, QgsFeature* > features = gml.featuresMap();

@@ -32,89 +32,34 @@
 const char NS_SEPARATOR = '?';
 const QString GML_NAMESPACE = "http://www.opengis.net/gml";
 
-QgsGml::QgsGml()
-    : QObject()
-    , mExtent( 0 )
-    , mFinished( false )
-    , mFeatureCount( 0 )
-{
-  mEndian = QgsApplication::endian();
-}
-
-#if 0
 QgsGml::QgsGml(
-  const QString& uri,
-  QgsRectangle* extent,
-  QMap<QgsFeatureId, QgsFeature*> &features,
-  QMap<QgsFeatureId, QString > &idMap,
+  const QString& typeName,
   const QString& geometryAttribute,
-  const QMap<QString, QPair<int, QgsField> >& thematicAttributes,
-  QGis::WkbType* wkbType )
+  const QgsFields & fields )
     : QObject(),
-    mUri( uri ),
-    mExtent( extent ),
-    //mFeatures( features ),
-    mIdMap( idMap ),
+    mTypeName( typeName ),
     mGeometryAttribute( geometryAttribute ),
-    mThematicAttributes( thematicAttributes ),
-    mWkbType( wkbType ),
     mFinished( false ),
     mFeatureCount( 0 )
-{
-  //find out mTypeName from uri (what about reading from local file?)
-  QStringList arguments = uri.split( "&" );
-  QStringList::const_iterator it;
-  for ( it = arguments.constBegin(); it != arguments.constEnd(); ++it )
-  {
-    if ( it->startsWith( "TYPENAME", Qt::CaseInsensitive ) )
-    {
-      mTypeName = it->section( "=", 1, 1 );
-      //and strip away namespace prefix
-      QStringList splitList = mTypeName.split( ":" );
-      if ( splitList.size() > 1 )
-      {
-        mTypeName = splitList.at( 1 );
-      }
-      QgsDebugMsg( QString( "mTypeName is: %1" ).arg( mTypeName ) );
-    }
-  }
-
-  mEndian = QgsApplication::endian();
-}
-#endif
-
-QgsGml::~QgsGml()
-{
-
-}
-
-void QgsGml::setAttributes( const QgsFields & fields )
 {
   mThematicAttributes.clear();
   for ( int i = 0; i < fields.size(); i++ )
   {
-    mThematicAttributes.insert( fields[i].name(), qMakePair( i, fields[i] ) );  }
+    mThematicAttributes.insert( fields[i].name(), qMakePair( i, fields[i] ) );
+  }
+
+  mEndian = QgsApplication::endian();
 }
 
-//void QgsGml::setFeatureType ( const QString & typeName, const QString& geometryAttribute, const QMap<QString, QPair<int, QgsField> >& thematicAttributes )
-void QgsGml::setFeatureType( const QString & typeName, const QString& geometryAttribute, const QgsFields & fields )
+QgsGml::~QgsGml()
 {
-  mTypeName = typeName;
-  mGeometryAttribute = geometryAttribute;
-  setAttributes( fields );
 }
 
-void QgsGml::clearParser()
-{
-  mParseModeStack.clear();
-}
-
-//int QgsGml::getWFSData()
-int QgsGml::getWFSData( const QString& uri, QgsRectangle* extent, QGis::WkbType* wkbType )
+int QgsGml::getFeatures( const QString& uri, QGis::WkbType* wkbType, QgsRectangle* extent )
 {
   mUri = uri;
-  mExtent = extent;
   mWkbType = wkbType;
+  mExtent = extent;
 
   XML_Parser p = XML_ParserCreateNS( NULL, NS_SEPARATOR );
   XML_SetUserData( p, this );
@@ -127,7 +72,6 @@ int QgsGml::getWFSData( const QString& uri, QgsRectangle* extent, QGis::WkbType*
     mExtent->set( 0, 0, 0, 0 );
   }
 
-  //QUrl requestUrl( mUri );
   QNetworkRequest request( mUri );
   QNetworkReply* reply = QgsNetworkAccessManager::instance()->get( request );
 
@@ -179,11 +123,11 @@ int QgsGml::getWFSData( const QString& uri, QgsRectangle* extent, QGis::WkbType*
   return 0;
 }
 
-int QgsGml::getWFSData( const QByteArray &data, QGis::WkbType* wkbType )
+int QgsGml::getFeatures( const QByteArray &data, QGis::WkbType* wkbType, QgsRectangle* extent )
 {
   QgsDebugMsg( "Entered" );
   mWkbType = wkbType;
-  clearParser();
+  mExtent = extent;
   if ( mExtent )
   {
     mExtent->set( 0, 0, 0, 0 );
@@ -216,12 +160,9 @@ void QgsGml::handleProgressEvent( qint64 progress, qint64 totalSteps )
 void QgsGml::startElement( const XML_Char* el, const XML_Char** attr )
 {
   QString elementName( el );
-  //QgsDebugMsg( QString( "-> %1 %2 %3" ).arg( mLevel ).arg( elementName ).arg( mLevel >= mSkipLevel ? "skip" : "" ) );
-  //QString localName = elementName.section( NS_SEPARATOR, 1, 1 );
   QStringList splitName =  elementName.split( NS_SEPARATOR );
   QString localName = splitName.last();
   QString ns = splitName.size() > 1 ? splitName.first() : "";
-  //QgsDebugMsg( "ns = " + ns + " localName = " + localName );
   if ( elementName == GML_NAMESPACE + NS_SEPARATOR + "coordinates" )
   {
     mParseModeStack.push( QgsGml::coordinate );
@@ -250,13 +191,11 @@ void QgsGml::startElement( const XML_Char* el, const XML_Char** attr )
   }
   else if ( localName == mTypeName )
   {
-    //QgsDebugMsg("found element " + localName );
     mCurrentFeature = new QgsFeature( mFeatureCount );
     QgsAttributes attributes( mThematicAttributes.size() ); //add empty attributes
     mCurrentFeature->setAttributes( attributes );
-    mParseModeStack.push( QgsGml::featureMember );
+    mParseModeStack.push( QgsGml::feature );
     mCurrentFeatureId = readAttribute( "fid", attr );
-
   }
   else if ( elementName == GML_NAMESPACE + NS_SEPARATOR + "Box" && mParseModeStack.top() == QgsGml::boundingBox )
   {
@@ -297,28 +236,20 @@ void QgsGml::startElement( const XML_Char* el, const XML_Char** attr )
     mParseModeStack.push( QgsGml::multiPolygon );
   }
 
-  else if ( mParseModeStack.size() == 1 && mParseModeStack.top() == QgsGml::featureMember && mThematicAttributes.find( localName ) != mThematicAttributes.end() )
+  else if ( mParseModeStack.size() == 1 && mParseModeStack.top() == QgsGml::feature && mThematicAttributes.find( localName ) != mThematicAttributes.end() )
   {
-    //QgsDebugMsg("is attribute");
     mParseModeStack.push( QgsGml::attribute );
     mAttributeName = localName;
     mStringCash.clear();
-  }
-  else
-  {
-    //QgsDebugMsg( QString("localName = %1 not interpreted").arg(localName) );
-    //QgsDebugMsg( QString("mParseModeStack.size() = %1 mThematicAttributes.count(localName) = %2").arg( mParseModeStack.size() ).arg(mThematicAttributes.count(localName)) );
   }
 }
 
 void QgsGml::endElement( const XML_Char* el )
 {
   QString elementName( el );
-  //QString localName = elementName.section( NS_SEPARATOR, 1, 1 );
   QStringList splitName =  elementName.split( NS_SEPARATOR );
   QString localName = splitName.last();
   QString ns = splitName.size() > 1 ? splitName.first() : "";
-  //QgsDebugMsg( "ns = " + ns + " localName = " + localName );
   if ( elementName == GML_NAMESPACE + NS_SEPARATOR + "coordinates" )
   {
     if ( !mParseModeStack.empty() )
@@ -541,7 +472,6 @@ void QgsGml::characters( const XML_Char* chars, int len )
     mStringCash.append( QString::fromUtf8( chars, len ) );
   }
 }
-
 
 int QgsGml::readEpsgFromAttribute( int& epsgNr, const XML_Char** attr ) const
 {

@@ -58,86 +58,15 @@ int QgsGmlFeatureClass::fieldIndex( const QString & name )
 // --------------------------- QgsGmlSchema -------------------------------
 QgsGmlSchema::QgsGmlSchema()
     : QObject()
-    , mExtent( 0 )
-    , mFinished( false )
-    , mFeatureCount( 0 )
 {
   mGeometryTypes << "Point" << "MultiPoint"
   << "LineString" << "MultiLineString"
   << "Polygon" << "MultiPolygon";
-
-  mEndian = QgsApplication::endian();
 }
-
-#if 0
-QgsGmlSchema::QgsGmlSchema(
-  const QString& uri,
-  QgsRectangle* extent,
-  QMap<QgsFeatureId, QgsFeature*> &features,
-  QMap<QgsFeatureId, QString > &idMap,
-  const QString& geometryAttribute,
-  const QMap<QString, QPair<int, QgsField> >& thematicAttributes,
-  QGis::WkbType* wkbType )
-    : QObject(),
-    mUri( uri ),
-    mExtent( extent ),
-    //mFeatures( features ),
-    mIdMap( idMap ),
-    mGeometryAttribute( geometryAttribute ),
-    mThematicAttributes( thematicAttributes ),
-    mWkbType( wkbType ),
-    mFinished( false ),
-    mFeatureCount( 0 )
-{
-  //find out mTypeName from uri (what about reading from local file?)
-  QStringList arguments = uri.split( "&" );
-  QStringList::const_iterator it;
-  for ( it = arguments.constBegin(); it != arguments.constEnd(); ++it )
-  {
-    if ( it->startsWith( "TYPENAME", Qt::CaseInsensitive ) )
-    {
-      mTypeName = it->section( "=", 1, 1 );
-      //and strip away namespace prefix
-      QStringList splitList = mTypeName.split( ":" );
-      if ( splitList.size() > 1 )
-      {
-        mTypeName = splitList.at( 1 );
-      }
-      QgsDebugMsg( QString( "mTypeName is: %1" ).arg( mTypeName ) );
-    }
-  }
-
-  mEndian = QgsApplication::endian();
-}
-#endif
 
 QgsGmlSchema::~QgsGmlSchema()
 {
 
-}
-
-void QgsGmlSchema::clearParser()
-{
-  mParseModeStack.clear();
-  mLevel = 0;
-  mSkipLevel = 0;
-  mParsePathStack.clear();
-}
-
-void QgsGmlSchema::setFinished( )
-{
-  mFinished = true;
-}
-
-void QgsGmlSchema::handleProgressEvent( qint64 progress, qint64 totalSteps )
-{
-  emit dataReadProgress( progress );
-  if ( totalSteps < 0 )
-  {
-    totalSteps = 0;
-  }
-  emit totalStepsUpdate( totalSteps );
-  emit dataProgressAndSteps( progress, totalSteps );
 }
 
 QString QgsGmlSchema::readAttribute( const QString& attributeName, const XML_Char** attr ) const
@@ -398,19 +327,6 @@ QDomElement QgsGmlSchema::domElement( const QDomElement &element, const QString 
   return domElements( list, attr, attrVal ).value( 0 );
 }
 
-#if 0
-QMap<int, QgsField> QgsGmlSchema::fields()
-{
-  QMap<int, QgsField>fields;
-  foreach ( QString key, mThematicAttributes.keys() )
-  {
-    QPair<int, QgsField> val = mThematicAttributes.value( key );
-    fields.insert( val.first, val.second );
-  }
-  return fields;
-}
-#endif
-
 bool QgsGmlSchema::guessSchema( const QByteArray &data )
 {
   QgsDebugMsg( "Entered" );
@@ -427,6 +343,7 @@ bool QgsGmlSchema::guessSchema( const QByteArray &data )
 
 void QgsGmlSchema::startElement( const XML_Char* el, const XML_Char** attr )
 {
+  Q_UNUSED( attr );
   mLevel++;
 
   QString elementName( el );
