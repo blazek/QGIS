@@ -23,8 +23,8 @@
 #include "qgsfeature.h"
 #include "qgsfield.h"
 #include "qgsgeometry.h"
+#include "qgsgml.h"
 #include "qgscoordinatereferencesystem.h"
-#include "qgswfsdata.h"
 #include "qgswfsprovider.h"
 #include "qgsspatialindex.h"
 #include "qgslogger.h"
@@ -769,7 +769,7 @@ int QgsWFSProvider::getFeatureGET( const QString& uri, const QString& geometryAt
   }
 
   //QgsWFSData dataReader( uri, &mExtent, mFeatures, mIdMap, geometryAttribute, thematicAttributes, &mWKBType );
-  QgsWFSData dataReader;
+  QgsGml dataReader;
   QString typeName = parameterFromUrl( "typename" );
   dataReader.setFeatureType( typeName, geometryAttribute, mFields );
 

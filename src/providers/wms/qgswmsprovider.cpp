@@ -36,7 +36,8 @@
 #include "qgsmessagelog.h"
 #include "qgsnetworkaccessmanager.h"
 #include "qgsnetworkreplyparser.h"
-#include "qgswfsdata.h"
+#include "qgsgml.h"
+#include "qgsgmlschema.h"
 
 #include <QNetworkRequest>
 #include <QNetworkReply>
@@ -4034,28 +4035,29 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
       QGis::WkbType wkbType;
       //QString uri;
       //QgsWFSData dataReader( uri, &extent, features, idMap, geometryAttribute, thematicAttributes, &wkbType );
-      QgsWFSData dataReader;
+      //QgsWFSData dataReader;
+      QgsGmlSchema gmlSchema;
 
       if ( xsdPart >= 0 )  // XSD available
       {
-        dataReader.parseXSD( mIdentifyResultBodies.value( xsdPart ) );
+        gmlSchema.parseXSD( mIdentifyResultBodies.value( xsdPart ) );
       }
       else
       {
         // guess from GML
-        dataReader.guessSchema( mIdentifyResultBodies.value( gmlPart ) );
+        gmlSchema.guessSchema( mIdentifyResultBodies.value( gmlPart ) );
       }
 
       //QgsFieldMap fields = dataReader.fields();
-      QStringList featureTypeNames = dataReader.typeNames();
+      QStringList featureTypeNames = gmlSchema.typeNames();
       QgsDebugMsg( QString( "%1 featureTypeNames found" ).arg( featureTypeNames.size() ) );
 
       foreach ( QString featureTypeName, featureTypeNames )
       {
         QgsDebugMsg( QString( "featureTypeName = %1" ).arg( featureTypeName ) );
 
-        QString geometryAttribute = dataReader.geometryAttributes( featureTypeName ).value( 0 );
-        QList<QgsField> fields = dataReader.fields( featureTypeName );
+        QString geometryAttribute = gmlSchema.geometryAttributes( featureTypeName ).value( 0 );
+        QList<QgsField> fields = gmlSchema.fields( featureTypeName );
         QgsDebugMsg( QString( "%1 fields found" ).arg( fields.size() ) );
         QgsFieldMap fieldMap;
         //QMap<QString, QPair<int, QgsField> > thematicAttributes;
@@ -4064,13 +4066,14 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
           //thematicAttributes.insert( fields[i].name(), qMakePair( i, fields[i] ) );
           fieldMap.insert( i, fields[i] );
         }
-        dataReader.setFeatureType( featureTypeName, geometryAttribute, fieldMap );
+        QgsGml gml;
+        gml.setFeatureType( featureTypeName, geometryAttribute, fieldMap );
         // TODO: avoid converting to string and back
         //int ret = dataReader.getWFSData( mIdentifyResultBodies.value( gmlPart ), &wkbType );
-        int ret = dataReader.getWFSData( mIdentifyResultBodies.value( gmlPart ), &wkbType );
+        int ret = gml.getWFSData( mIdentifyResultBodies.value( gmlPart ), &wkbType );
         QgsDebugMsg( QString( "parsing result = %1" ).arg( ret ) );
 
-        QMap<QgsFeatureId, QgsFeature* > features = dataReader.featuresMap();
+        QMap<QgsFeatureId, QgsFeature* > features = gml.featuresMap();
         QgsDebugMsg( QString( "%1 features read" ).arg( features.size() ) );
         QgsRasterFeatureList featureList;
         foreach ( QgsFeatureId id, features.keys() )

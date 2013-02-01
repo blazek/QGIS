@@ -1,15 +1,13 @@
-typedef QMap<int, QgsField> QgsFieldMap;
-
-class QgsWFSData: QObject 
+class QgsGml: QObject 
 {
 
 %TypeHeaderCode
-#include <qgswfsdata.h>
+#include <qgsgml.h>
 %End
 
   public:
     /*
-    QgsWFSData(
+    QgsGml(
       const QString& uri,
       QgsRectangle* extent,
       QMap<QgsFeatureId, QgsFeature* > &features,
@@ -18,8 +16,8 @@ class QgsWFSData: QObject
       const QMap<QString, QPair<int, QgsField> >& thematicAttributes,
       QGis::WkbType* wkbType );
     */
-    QgsWFSData();
-    ~QgsWFSData();
+    QgsGml();
+    ~QgsGml();
 
     //void setFeatureType ( const QString & typeName, const QString& geometryAttribute, const QMap<QString, QPair<int, QgsField> >& thematicAttributes );
     void setFeatureType ( const QString & typeName, const QString& geometryAttribute, const QgsFieldMap & thematicAttributes );
@@ -40,20 +38,4 @@ class QgsWFSData: QObject
     //QList<QgsFeature*> features() const;
     QVector<QgsFeature*> featuresVector() const;
 
-    /** Get fields info from XSD */
-    bool parseXSD( const QByteArray &xml );
-
-    /** Guess GML schema from data if XSD does not exist.
-      * Currently only recognizes UMN Mapserver GetFeatureInfo GML response.
-      * @param data GML data
-      * @return true in case of success */
-    bool guessSchema( const QByteArray &data );
-
-    QStringList typeNames() const;
-
-    //QMap<int, QgsField> fields();
-
-    QList<QgsField> fields( const QString & typeName );
-
-    QStringList geometryAttributes( const QString & typeName );
 };
