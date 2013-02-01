@@ -68,6 +68,8 @@ SET(QGIS_CORE_SRCS
   qgsfield.cpp
   qgsgeometry.cpp
   qgsgeometryvalidator.cpp
+  qgsgml.cpp
+  qgsgmlschema.cpp
   qgshttptransaction.cpp
   qgslabel.cpp
   qgslabelattributes.cpp
@@ -119,7 +121,6 @@ SET(QGIS_CORE_SRCS
   qgsvectorlayerjoinbuffer.cpp
   qgsvectorlayerundocommand.cpp
   qgsvectoroverlay.cpp
-  qgswfsdata.cpp
 
   qgsnetworkaccessmanager.cpp
 
@@ -295,6 +296,8 @@ SET(QGIS_CORE_MOC_HDRS
   qgscoordinatetransform.h
   qgsdataitem.h
   qgsdataprovider.h
+  qgsgml.h
+  qgsgmlschema.h
   qgshttptransaction.h
   qgsmaplayer.h
   qgsmaplayerregistry.h
@@ -311,7 +314,6 @@ SET(QGIS_CORE_MOC_HDRS
   qgsvectorlayereditbuffer.h
   qgsnetworkaccessmanager.h
   qgsvectordataprovider.h
-  qgswfsdata.h
   qgsgeometryvalidator.h
 
   composer/qgsaddremoveitemcommand.h
@@ -385,6 +387,8 @@ SET(QGIS_CORE_HDRS
   qgsfeaturerequest.h
   qgsfield.h
   qgsgeometry.h
+  qgsgml.h
+  qgsgmlschema.h
   qgshttptransaction.h
   qgslabel.h
   qgslabelattributes.h
@@ -431,7 +435,6 @@ SET(QGIS_CORE_HDRS
   qgsvectorlayerimport.h
   qgsvectorlayerundocommand.h
   qgsvectoroverlay.h
-  qgswfsdata.h
   qgstolerance.h
 
   diagram/qgsdiagram.h

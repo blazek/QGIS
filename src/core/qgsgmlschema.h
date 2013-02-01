@@ -1,5 +1,5 @@
 /***************************************************************************
-     qgswfsdata.h
+     qgsgmlschema.h
      --------------------------------------
     Date                 : Sun Sep 16 12:19:55 AKDT 2007
     Copyright            : (C) 2007 by Gary E. Sherman
@@ -12,8 +12,8 @@
  *   (at your option) any later version.                                   *
  *                                                                         *
  ***************************************************************************/
-#ifndef QGSWFSDATA_H
-#define QGSWFSDATA_H
+#ifndef QGSGMLSCHEMA_H
+#define QGSGMLSCHEMA_H
 
 #include <expat.h>
 #include "qgis.h"
@@ -71,56 +71,13 @@ class CORE_EXPORT QgsGmlFeatureClass
     QStringList mGeometryAttributes;
 };
 
-
-/**This class reads data from a WFS server or alternatively from a GML file. It uses the expat XML parser and an event based model to keep performance high. The parsing starts when the first data arrives, it does not wait until the request is finished*/
-class CORE_EXPORT QgsWFSData: public QObject
+class CORE_EXPORT QgsGmlSchema: public QObject
 {
     Q_OBJECT
   public:
-    QgsWFSData();
+    QgsGmlSchema();
 
-    /*
-        QgsWFSData(
-          const QString& uri,
-          QgsRectangle* extent,
-          QMap<QgsFeatureId, QgsFeature* > &features,
-          QMap<QgsFeatureId, QString > &idMap,
-          const QString& geometryAttribute,
-          const QMap<QString, QPair<int, QgsField> >& thematicAttributes,
-          QGis::WkbType* wkbType );
-    */
-
-    ~QgsWFSData();
-
-    void setAttributes( const QgsFieldMap & fieldMap );
-
-    /** Set feature type to be parsed */
-    //void setFeatureType ( const QString & typeName, const QString& geometryAttribute, const QMap<QString, QPair<int, QgsField> >& thematicAttributes );
-    void setFeatureType( const QString & typeName, const QString& geometryAttribute, const QgsFieldMap & fieldMap );
-
-    void clearParser();
-
-    /**Does the Http GET request to the wfs server
-       @param query string (to define the requested typename)
-       @param extent the extent of the WFS layer
-       @param srs the reference system of the layer
-       @param features the features of the layer
-    @return 0 in case of success*/
-    //int getWFSData();
-    int getWFSData( const QString& uri, QgsRectangle* extent, QGis::WkbType* wkbType );
-
-    /** Read from give GML. Constructor uri param is ignored */
-    int getWFSData( const QByteArray &data, QGis::WkbType* wkbType );
-
-    /** Get parsed features for given type name */
-    //QMap<QgsFeatureId, QgsFeature* > features( const QString & typeName ) const { return mFeatures.value(typeName); }
-    QMap<QgsFeatureId, QgsFeature* > featuresMap() const { return mFeatures; }
-    QList<QgsFeature*> features() const { return mFeatures.values(); }
-    QVector<QgsFeature*> featuresVector() const { return mFeatures.values().toVector(); }
-
-    /** Get feature ids map */
-    //QMap<QgsFeatureId, QString > idMap( const QString & typeName ) const { return mIdMap.value(typeName); }
-    QMap<QgsFeatureId, QString > idMap() const { return mIdMap; }
+    ~QgsGmlSchema();
 
     /** Get fields info from XSD */
     bool parseXSD( const QByteArray &xml );
@@ -148,32 +105,6 @@ class CORE_EXPORT QgsWFSData: public QObject
 
     /**Takes progress value and total steps and emit signals 'dataReadProgress' and 'totalStepUpdate'*/
     void handleProgressEvent( qint64 progress, qint64 totalSteps );
-
-    /* XSD parsing support methods */
-
-    /** Get dom elements by path */
-    QList<QDomElement> domElements( const QDomElement &element, const QString & path );
-
-    /** Get dom element by path */
-    QDomElement domElement( const QDomElement &element, const QString & path );
-
-    /** Filter list of elements by attribute value */
-    QList<QDomElement> domElements( QList<QDomElement> &elements, const QString & attr, const QString & attrVal );
-
-    /** Get dom element by path and attribute value */
-    QDomElement domElement( const QDomElement &element, const QString & path, const QString & attr, const QString & attrVal );
-
-    /** Strip namespace from element name */
-    QString stripNS( const QString & name );
-
-    /** Find GML base type for complex type of given name
-     * @param name complex type name
-     * @return name of GML base type without NS, e.g. AbstractFeatureType or empty string if not pased on GML type
-     */
-    QString xsdComplexTypeGmlBaseType( const QDomElement &element, const QString & name );
-
-    /** Get feature class information from complex type recursively */
-    bool xsdFeatureClass( const QDomElement &element, const QString & typeName, QgsGmlFeatureClass & featureClass );
 
   signals:
     void dataReadProgress( int progress );
@@ -206,71 +137,51 @@ class CORE_EXPORT QgsWFSData: public QObject
     void characters( const XML_Char* chars, int len );
     static void start( void* data, const XML_Char* el, const XML_Char** attr )
     {
-      static_cast<QgsWFSData*>( data )->startElement( el, attr );
+      static_cast<QgsGmlSchema*>( data )->startElement( el, attr );
     }
     static void end( void* data, const XML_Char* el )
     {
-      static_cast<QgsWFSData*>( data )->endElement( el );
+      static_cast<QgsGmlSchema*>( data )->endElement( el );
     }
     static void chars( void* data, const XML_Char* chars, int len )
     {
-      static_cast<QgsWFSData*>( data )->characters( chars, len );
-    }
-
-    /**XML handler methods for guessing schema from data*/
-    void startElementSchema( const XML_Char* el, const XML_Char** attr );
-    void endElementSchema( const XML_Char* el );
-    void charactersSchema( const XML_Char* chars, int len );
-    static void startSchema( void* data, const XML_Char* el, const XML_Char** attr )
-    {
-      static_cast<QgsWFSData*>( data )->startElementSchema( el, attr );
-    }
-    static void endSchema( void* data, const XML_Char* el )
-    {
-      static_cast<QgsWFSData*>( data )->endElementSchema( el );
-    }
-    static void charsSchema( void* data, const XML_Char* chars, int len )
-    {
-      static_cast<QgsWFSData*>( data )->charactersSchema( chars, len );
+      static_cast<QgsGmlSchema*>( data )->characters( chars, len );
     }
 
     //helper routines
-    /**Reads attribute srsName="EpsgCrsId:..."
-       @param epsgNr result
-       @param attr attribute strings
-       @return 0 in case of success*/
-    int readEpsgFromAttribute( int& epsgNr, const XML_Char** attr ) const;
-    /**Reads attribute as string
-       @param attributeName
-       @param attr
-       @return attribute value or an empty string if no such attribute*/
-    QString readAttribute( const QString& attributeName, const XML_Char** attr ) const;
-    /**Creates a rectangle from a coordinate string.
-     @return 0 in case of success*/
-    int createBBoxFromCoordinateString( QgsRectangle* bb, const QString& coordString ) const;
-    /**Creates a set of points from a coordinate string.
-       @param points list that will contain the created points
-       @param coordString the text containing the coordinates
-       @return 0 in case of success*/
-    int pointsFromCoordinateString( std::list<QgsPoint>& points, const QString& coordString ) const;
+    void clearParser();
 
-    int getPointWKB( unsigned char** wkb, int* size, const QgsPoint& ) const;
-    int getLineWKB( unsigned char** wkb, int* size, const std::list<QgsPoint>& lineCoordinates ) const;
-    int getRingWKB( unsigned char** wkb, int* size, const std::list<QgsPoint>& ringCoordinates ) const;
-    /**Creates a multiline from the information in mCurrentWKBFragments and mCurrentWKBFragmentSizes. Assign the result. The multiline is in mCurrentWKB and mCurrentWKBSize. The function deletes the memory in mCurrentWKBFragments. Returns 0 in case of success.*/
-    int createMultiLineFromFragments();
-    int createMultiPointFromFragments();
-    int createPolygonFromFragments();
-    int createMultiPolygonFromFragments();
-    /**Adds all the integers contained in mCurrentWKBFragmentSizes*/
-    int totalWKBFragmentSize() const;
+    /**Reads attribute as string
+      @return attribute value or an empty string if no such attribute*/
+    QString readAttribute( const QString& attributeName, const XML_Char** attr ) const;
 
     /**Returns pointer to main window or 0 if it does not exist*/
     QWidget* findMainWindow() const;
-    /**This function evaluates the layer bounding box from the features and sets it to mExtent.
-    Less efficient compared to reading the bbox from the provider, so it is only done if the wfs server
-    does not provider extent information.*/
-    void calculateExtentFromFeatures() const;
+
+    /** Get dom elements by path */
+    QList<QDomElement> domElements( const QDomElement &element, const QString & path );
+
+    /** Get dom element by path */
+    QDomElement domElement( const QDomElement &element, const QString & path );
+
+    /** Filter list of elements by attribute value */
+    QList<QDomElement> domElements( QList<QDomElement> &elements, const QString & attr, const QString & attrVal );
+
+    /** Get dom element by path and attribute value */
+    QDomElement domElement( const QDomElement &element, const QString & path, const QString & attr, const QString & attrVal );
+
+    /** Strip namespace from element name */
+    QString stripNS( const QString & name );
+
+    /** Find GML base type for complex type of given name
+     * @param name complex type name
+     * @return name of GML base type without NS, e.g. AbstractFeatureType or empty string if not pased on GML type
+     */
+    QString xsdComplexTypeGmlBaseType( const QDomElement &element, const QString & name );
+
+    /** Get feature class information from complex type recursively */
+    bool xsdFeatureClass( const QDomElement &element, const QString & typeName, QgsGmlFeatureClass & featureClass );
+
 
     /** Get safely (if empty) top from mode stack */
     ParseMode modeStackTop() { return mParseModeStack.isEmpty() ? none : mParseModeStack.top(); }
@@ -304,7 +215,6 @@ class CORE_EXPORT QgsWFSData: public QObject
     /**This contains the character data if an important element has been encountered*/
     QString mStringCash;
     QgsFeature* mCurrentFeature;
-    QVector<QVariant> mCurrentAttributes; //attributes of current feature
     QString mCurrentFeatureId;
     int mFeatureCount;
     /**The total WKB for a feature*/

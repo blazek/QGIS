@@ -31,6 +31,8 @@
 %Include qgsfield.sip
 %Include qgsgeometry.sip
 %Include qgsgeometryvalidator.sip
+%Include qgsgml.sip
+%Include qgsgmlschema.sip
 %Include qgshttptransaction.sip
 %Include qgslabel.sip
 %Include qgslabelattributes.sip
@@ -79,7 +81,6 @@
 %Include qgsvectorlayerjoinbuffer.sip
 %Include qgsvectorlayerundocommand.sip
 %Include qgsvectoroverlay.sip
-%Include qgswfsdata.sip
 
 %Include composer/qgsaddremoveitemcommand.sip
 %Include composer/qgsaddremovemultiframecommand.sip

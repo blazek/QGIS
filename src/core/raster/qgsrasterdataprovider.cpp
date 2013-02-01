@@ -31,7 +31,7 @@ QgsRasterFeature::QgsRasterFeature()
 {
 }
 
-QgsRasterFeature::QgsRasterFeature( const QgsFeature & feature, const QgsFieldMap & fields )
+QgsRasterFeature::QgsRasterFeature( const QgsFeature & feature, const QgsFields & fields )
     : QgsFeature( feature )
     , mFields( fields )
 {

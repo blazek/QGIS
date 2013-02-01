@@ -60,7 +60,7 @@ class CORE_EXPORT QgsRasterFeature : public QgsFeature
     QgsRasterFeature( );
 
     //! Constructor
-    QgsRasterFeature( const QgsFeature & feature, const QgsFieldMap & fields );
+    QgsRasterFeature( const QgsFeature & feature, const QgsFields & fields );
 
     //! Copy constructor
     //QgsRasterFeature( const QgsFeature & rhs );
@@ -68,12 +68,12 @@ class CORE_EXPORT QgsRasterFeature : public QgsFeature
     //! Destructor
     ~QgsRasterFeature();
 
-    const QgsFieldMap & fields() const { return mFields; }
+    const QgsFields & fields() const { return mFields; }
 
-    void setFields( const QgsFieldMap & fields ) { mFields = fields; }
+    void setFields( const QgsFields & fields ) { mFields = fields; }
 
   private:
-    QgsFieldMap mFields;
+    QgsFields mFields;
 };
 
 typedef QList<QgsRasterFeature> QgsRasterFeatureList;
