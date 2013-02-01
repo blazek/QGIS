@@ -100,18 +100,6 @@ class CORE_EXPORT QgsGmlSchema: public QObject
     /** Get list of geometry attributes for type/class name */
     QStringList geometryAttributes( const QString & typeName );
 
-  private slots:
-    void setFinished();
-
-    /**Takes progress value and total steps and emit signals 'dataReadProgress' and 'totalStepUpdate'*/
-    void handleProgressEvent( qint64 progress, qint64 totalSteps );
-
-  signals:
-    void dataReadProgress( int progress );
-    void totalStepsUpdate( int totalSteps );
-    //also emit signal with progress and totalSteps together (this is better for the status message)
-    void dataProgressAndSteps( int progress, int totalSteps );
-
   private:
 
     enum ParseMode
@@ -121,14 +109,7 @@ class CORE_EXPORT QgsGmlSchema: public QObject
       featureMember, // gml:featureMember
       feature,  // feature element containint attrs and geo (inside gml:featureMember)
       attribute,
-      geometry,
-      coordinate,
-      point,
-      line,
-      polygon,
-      multiPoint,
-      multiLine,
-      multiPolygon
+      geometry
     };
 
     /**XML handler methods*/
@@ -149,7 +130,6 @@ class CORE_EXPORT QgsGmlSchema: public QObject
     }
 
     //helper routines
-    void clearParser();
 
     /**Reads attribute as string
       @return attribute value or an empty string if no such attribute*/
@@ -189,26 +169,6 @@ class CORE_EXPORT QgsGmlSchema: public QObject
     /** Safely (if empty) pop from mode stack */
     ParseMode modeStackPop() { return mParseModeStack.isEmpty() ? none : mParseModeStack.pop(); }
 
-    QString mUri;
-    //results are members such that handler routines are able to manipulate them
-    /**Bounding box of the layer*/
-    QgsRectangle* mExtent;
-    /**The features of the layer, map of feature maps for each feature type*/
-    //QMap<QgsFeatureId, QgsFeature* > &mFeatures;
-    QMap<QgsFeatureId, QgsFeature* > mFeatures;
-    //QMap<QString, QMap<QgsFeatureId, QgsFeature* > > mFeatures;
-
-    /**Stores the relation between provider ids and WFS server ids*/
-    //QMap<QgsFeatureId, QString > &mIdMap;
-    QMap<QgsFeatureId, QString > mIdMap;
-    //QMap<QString, QMap<QgsFeatureId, QString > > mIdMap;
-    /**Name of geometry attribute*/
-    QString mGeometryAttribute;
-    //const QMap<QString, QPair<int, QgsField> > &mThematicAttributes;
-    QMap<QString, QPair<int, QgsField> > mThematicAttributes;
-    QGis::WkbType* mWkbType;
-    /**True if the request is finished*/
-    bool mFinished;
     /**Keep track about the most important nested elements*/
     //std::stack<ParseMode> mParseModeStack;
     QStack<ParseMode> mParseModeStack;
@@ -217,17 +177,7 @@ class CORE_EXPORT QgsGmlSchema: public QObject
     QgsFeature* mCurrentFeature;
     QString mCurrentFeatureId;
     int mFeatureCount;
-    /**The total WKB for a feature*/
-    unsigned char* mCurrentWKB;
-    /**The total WKB size for a feature*/
-    int mCurrentWKBSize;
-    /**WKB intermediate storage during parsing. For points and lines, no intermediate WKB is stored at all. For multipoins and multilines and polygons, only one nested list is used. For multipolygons, both nested lists are used*/
-    std::list< std::list<unsigned char*> > mCurrentWKBFragments;
-    /**Similar to mCurrentWKB, but only the size*/
-    std::list< std::list<int> > mCurrentWKBFragmentSizes;
     QString mAttributeName;
-    QString mTypeName;
-    QgsApplication::endian_t mEndian;
     /**Coordinate separator for coordinate strings. Usually "," */
     QString mCoordinateSeparator;
     /**Tuple separator for coordinate strings. Usually " " */

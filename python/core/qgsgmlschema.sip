@@ -1,5 +1,3 @@
-typedef QMap<int, QgsField> QgsFieldMap;
-
 class QgsGmlSchema: QObject 
 {
 
