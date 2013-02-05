@@ -293,9 +293,8 @@ QTreeWidgetItem *QgsIdentifyResultsDialog::layerItem( QObject *layer )
 }
 
 void QgsIdentifyResultsDialog::addFeature( QgsVectorLayer *vlayer,
-                                     const QgsFeature &f,
-                                     const QgsCoordinateReferenceSystem &crs,
-                                     const QMap<QString, QString> &derivedAttributes )
+    const QgsFeature &f,
+    const QMap<QString, QString> &derivedAttributes )
 {
   QTreeWidgetItem *layItem = layerItem( vlayer );
 
@@ -315,7 +314,7 @@ void QgsIdentifyResultsDialog::addFeature( QgsVectorLayer *vlayer,
   }
 
   //QgsIdentifyResultsFeatureItem *featItem = new QgsIdentifyResultsFeatureItem( fields, f, crs );
-  QgsIdentifyResultsFeatureItem *featItem = new QgsIdentifyResultsFeatureItem( vlayer->pendingFields(), f, crs );
+  QgsIdentifyResultsFeatureItem *featItem = new QgsIdentifyResultsFeatureItem( vlayer->pendingFields(), f, vlayer->crs() );
   featItem->setData( 0, Qt::UserRole, FID_TO_STRING( f.id() ) );
   featItem->setData( 0, Qt::UserRole + 1, mFeatures.size() );
   mFeatures << f;
@@ -408,13 +407,13 @@ void QgsIdentifyResultsDialog::addFeature( QgsVectorLayer *vlayer,
 }
 
 void QgsIdentifyResultsDialog::addFeature( QgsRasterLayer *layer,
-                                     QString label,
-                                     const QMap<QString, QString> &attributes,
-                                     const QMap<QString, QString> &derivedAttributes,
-                                     const QgsFields &fields,
-                                     const QgsFeature &feature,
-                                     const QgsCoordinateReferenceSystem &crs )
+    QString label,
+    const QMap<QString, QString> &attributes,
+    const QMap<QString, QString> &derivedAttributes,
+    const QgsFields &fields,
+    const QgsFeature &feature )
 {
+  QgsDebugMsg( QString( "feature.isValid() = %1" ).arg( feature.isValid() ) );
   QTreeWidgetItem *layItem = layerItem( layer );
 
   QgsRasterDataProvider::IdentifyFormat currentFormat = QgsRasterDataProvider::identifyFormatFromName( layer->customProperty( "identify/format" ).toString() );
@@ -462,9 +461,33 @@ void QgsIdentifyResultsDialog::addFeature( QgsRasterLayer *layer,
     connect( layer, SIGNAL( layerCrsChanged() ), this, SLOT( layerDestroyed() ) );
   }
 
-  QgsIdentifyResultsFeatureItem *featItem = new QgsIdentifyResultsFeatureItem( fields, feature, crs, QStringList() << label << "" );
+  QgsIdentifyResultsFeatureItem *featItem = new QgsIdentifyResultsFeatureItem( fields, feature, layer->crs(), QStringList() << label << "" );
   //featItem->setData( 0, Qt::UserRole, -1 ); // FID
   layItem->addChild( featItem );
+
+  // add feature attributes
+  if ( feature.isValid() )
+  {
+    QgsDebugMsg( QString( "fields size = %1 attributes size = %2" ).arg( fields.size() ).arg( feature.attributes().size() ) );
+    const QgsAttributes& attrs = feature.attributes();
+    for ( int i = 0; i < attrs.count(); ++i )
+    {
+      if ( i >= fields.count() )
+        continue;
+
+      QTreeWidgetItem *attrItem = new QTreeWidgetItem( QStringList() << QString::number( i ) << attrs[i].toString() );
+
+      attrItem->setData( 0, Qt::DisplayRole, fields[i].name() );
+      //attrItem->setData( 0, Qt::UserRole, fields[i].name() );
+      //attrItem->setData( 0, Qt::UserRole + 1, i );
+
+      QVariant value = attrs[i];
+      attrItem->setData( 1, Qt::DisplayRole, value );
+      //attrItem->setData( 1, Qt::UserRole, value );
+
+      featItem->addChild( attrItem );
+    }
+  }
 
   if ( currentFormat == QgsRasterDataProvider::IdentifyFormatHtml )
   {

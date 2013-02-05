@@ -100,18 +100,12 @@ void QgsMapToolIdentifyAction::canvasReleaseEvent( QMouseEvent *e )
   QList<VectorResult>::const_iterator vresult;
   for ( vresult = results().mVectorResults.begin(); vresult != results().mVectorResults.end(); ++vresult )
   {
-    //resultsDialog()->addFeature( vresult->mLayer, vresult->mFeature, vresult->mDerivedAttributes);
-    QgsDebugMsg( "TODO crs" );
-    QgsCoordinateReferenceSystem crs;
-    resultsDialog()->addFeature( vresult->mLayer, vresult->mFeature, crs, vresult->mDerivedAttributes );
+    resultsDialog()->addFeature( vresult->mLayer, vresult->mFeature, vresult->mDerivedAttributes );
   }
   QList<RasterResult>::const_iterator rresult;
   for ( rresult = results().mRasterResults.begin(); rresult != results().mRasterResults.end(); ++rresult )
   {
-    QgsDebugMsg( "TODO" );
-    //resultsDialog()->addFeature( rresult->mLayer, rresult->mLabel, rresult->mAttributes, rresult->mDerivedAttributes);
-    //QgsGeometry geom;
-    //resultsDialog()->addFeature( rresult->mLayer, rresult->mLabel, rresult->mAttributes, rresult->mDerivedAttributes, geom);
+    resultsDialog()->addFeature( rresult->mLayer, rresult->mLabel, rresult->mAttributes, rresult->mDerivedAttributes, rresult->mFields,  rresult->mFeature );
   }
 
   if ( res )

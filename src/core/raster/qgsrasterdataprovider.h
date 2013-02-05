@@ -46,41 +46,6 @@ class QByteArray;
 #define TINY_VALUE  std::numeric_limits<double>::epsilon() * 20
 #define RASTER_HISTOGRAM_BINS 256
 
-
-/** \ingroup core
- * Class representing vector feature including fields and layer description.
- * Used as identify result by WMS provider.
-*/
-class CORE_EXPORT QgsRasterFeature : public QgsFeature
-{
-    //Q_OBJECT
-
-  public:
-    //! Constructor
-    QgsRasterFeature( );
-
-    //! Constructor
-    QgsRasterFeature( const QgsFeature & feature, const QgsFields & fields );
-
-    //! Copy constructor
-    //QgsRasterFeature( const QgsFeature & rhs );
-
-    //! Destructor
-    ~QgsRasterFeature();
-
-    const QgsFields & fields() const { return mFields; }
-
-    void setFields( const QgsFields & fields ) { mFields = fields; }
-
-  private:
-    QgsFields mFields;
-};
-
-typedef QList<QgsRasterFeature> QgsRasterFeatureList;
-
-Q_DECLARE_METATYPE( QgsRasterFeature );
-Q_DECLARE_METATYPE( QgsRasterFeatureList );
-
 /** \ingroup core
  * Base class for raster data providers.
  *

@@ -16,6 +16,7 @@
 #include "qgscursors.h"
 #include "qgsdistancearea.h"
 #include "qgsfeature.h"
+#include "qgsfeaturestore.h"
 #include "qgsfield.h"
 #include "qgsgeometry.h"
 #include "qgslogger.h"
@@ -77,17 +78,17 @@ void QgsMapToolIdentify::canvasReleaseEvent( QMouseEvent *e )
   */
 }
 
-bool QgsMapToolIdentify::identify(int x, int y, QList<QgsMapLayer *> layerList, IdentifyMode mode)
+bool QgsMapToolIdentify::identify( int x, int y, QList<QgsMapLayer *> layerList, IdentifyMode mode )
 {
-    return identify(x, y, mode, layerList, AllLayers);
+  return identify( x, y, mode, layerList, AllLayers );
 }
 
-bool QgsMapToolIdentify::identify(int x, int y, IdentifyMode mode, LayerType layerType)
+bool QgsMapToolIdentify::identify( int x, int y, IdentifyMode mode, LayerType layerType )
 {
-    return identify(x, y, mode, QList<QgsMapLayer*>(), layerType);
+  return identify( x, y, mode, QList<QgsMapLayer*>(), layerType );
 }
 
-bool QgsMapToolIdentify::identify(int x, int y, IdentifyMode mode, QList<QgsMapLayer*> layerList, LayerType layerType )
+bool QgsMapToolIdentify::identify( int x, int y, IdentifyMode mode, QList<QgsMapLayer*> layerList, LayerType layerType )
 {
   //mLastPoint = mCanvas->getCoordinateTransform()->toMapCoordinates( e->x(), e->y() );
   mLastPoint = mCanvas->getCoordinateTransform()->toMapCoordinates( x, y );
@@ -107,13 +108,13 @@ bool QgsMapToolIdentify::identify( QgsPoint point, QgsRectangle viewExtent, doub
   mResultData.mVectorResults.clear();
   mResultData.mRasterResults.clear();
 
-  if (mode == DefaultQgsSetting)
+  if ( mode == DefaultQgsSetting )
   {
     QSettings settings;
     mode = static_cast<IdentifyMode>( settings.value( "/Map/identifyMode", 0 ).toInt() );
   }
 
-  if ( mode == ActiveLayer && ~layerList.isEmpty())
+  if ( mode == ActiveLayer && ~layerList.isEmpty() )
   {
     QgsMapLayer *layer = mCanvas->currentLayer();
 
@@ -135,20 +136,20 @@ bool QgsMapToolIdentify::identify( QgsPoint point, QgsRectangle viewExtent, doub
     QStringList noIdentifyLayerIdList = QgsProject::instance()->readListEntry( "Identify", "/disabledLayers" );
 
     int layerCount;
-    if (layerList.isEmpty())
-        layerCount = mCanvas->layerCount();
+    if ( layerList.isEmpty() )
+      layerCount = mCanvas->layerCount();
     else
-        layerCount = layerList.count();
+      layerCount = layerList.count();
 
 
     for ( int i = 0; i < layerCount; i++ )
     {
 
       QgsMapLayer *layer ;
-      if (layerList.isEmpty())
-          layer = mCanvas->layer( i );
+      if ( layerList.isEmpty() )
+        layer = mCanvas->layer( i );
       else
-          layer = layerList.value( i );
+        layer = layerList.value( i );
 
       emit identifyProgress( i, mCanvas->layerCount() );
       emit identifyMessage( tr( "Identifying on %1..." ).arg( layer->name() ) );
@@ -189,11 +190,11 @@ bool QgsMapToolIdentify::identifyLayer( QgsMapLayer *layer, QgsPoint point, QgsR
 {
   //QgsPoint point = mCanvas->getCoordinateTransform()->toMapCoordinates( x, y );
 
-  if ( layer->type() == QgsMapLayer::RasterLayer && (layerType==AllLayers || layerType==RasterLayer))
+  if ( layer->type() == QgsMapLayer::RasterLayer && ( layerType == AllLayers || layerType == RasterLayer ) )
   {
     return identifyRasterLayer( qobject_cast<QgsRasterLayer *>( layer ), point, viewExtent, mapUnitsPerPixel );
   }
-  else if ( layer->type() == QgsMapLayer::VectorLayer && (layerType==AllLayers || layerType==VectorLayer))
+  else if ( layer->type() == QgsMapLayer::VectorLayer && ( layerType == AllLayers || layerType == VectorLayer ) )
   {
     return identifyVectorLayer( qobject_cast<QgsVectorLayer *>( layer ), point );
   }
@@ -205,7 +206,7 @@ bool QgsMapToolIdentify::identifyLayer( QgsMapLayer *layer, QgsPoint point, QgsR
 
 bool QgsMapToolIdentify::identifyVectorLayer( QgsVectorLayer *layer, QgsPoint point )
 {
-  QgsDebugMsg("point = " + point.toString() );
+  QgsDebugMsg( "point = " + point.toString() );
   if ( !layer )
     return false;
 
@@ -286,9 +287,9 @@ bool QgsMapToolIdentify::identifyVectorLayer( QgsVectorLayer *layer, QgsPoint po
 
     derivedAttributes.insert( tr( "feature id" ), fid < 0 ? tr( "new feature" ) : FID_TO_STRING( fid ) );
 
-    QgsDebugMsg("TODO: layer crs");
+    QgsDebugMsg( "TODO: layer crs" );
     //results()->addFeature( layer, layer->dataProvider()->fields(), *f_it, layer->crs(), derivedAttributes );
-    mResultData.mVectorResults.append( VectorResult(layer, *f_it, derivedAttributes));
+    mResultData.mVectorResults.append( VectorResult( layer, *f_it, derivedAttributes ) );
   }
 
   if ( renderer && renderer->capabilities() & QgsFeatureRendererV2::ScaleDependent )
@@ -459,33 +460,21 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
       }
       attributes.insert( dprovider->generateBandName( bandNo ), valueString );
     }
-    QgsDebugMsg("TODO");
+    QgsDebugMsg( "TODO" );
     //results()->addFeature( layer, type, attributes, derivedAttributes );
   }
   else if ( format == QgsRasterDataProvider::IdentifyFormatFeature )
   {
     foreach ( int i, values.keys() )
     {
-      QgsRasterFeatureList features = values.value( i ).value<QgsRasterFeatureList>();
+      QgsFeatureStore featureStore = values.value( i ).value<QgsFeatureStore>();
 
-      foreach ( QgsRasterFeature feature, features )
+      foreach ( QgsFeature feature, featureStore.features() )
       {
-        // TODO
-        QgsDebugMsg("TODO");
-        /*
         attributes.clear();
-        derivedAttributes.clear();
-        derivedAttributes.insert( tr( "(clicked coordinate)" ), point.toString() );
-        derivedAttributes.unite( featureDerivedAttributes( &feature, layer ) );
-        foreach ( int k, feature.attributeMap().keys() )
-        {
-          QgsDebugMsg( QString( "%1 : %2" ).arg( feature.fields().value( k ).name() ).arg( feature.attributeMap().value( k ).toString() ) );
-          attributes.insert( feature.fields().value( k ).name(), feature.attributeMap().value( k ).toString() );
-        }
-        results()->addFeature( layer, type, attributes, derivedAttributes, *feature.geometry() );
-        results()->addFeature( layer, type, attributes, derivedAttributes, feature.fields(), feature, layer->crs() );
-        */
-        //mResultData.mRasterResults.append( RasterResult(layer, *f_it, derivedAttributes));
+        // TODO label - sublayer or GML feature type?
+        QString label = "Raster";
+        mResultData.mRasterResults.append( RasterResult( layer, label, featureStore.fields(), feature, derivedAttributes ) );
       }
     }
     return true;
@@ -503,7 +492,7 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
       attributes.clear();
       attributes.insert( "", value );
 
-      QgsDebugMsg("TODO");
+      QgsDebugMsg( "TODO" );
       //results()->addFeature( layer, type, attributes, derivedAttributes );
     }
   }
@@ -511,9 +500,9 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
   if ( attributes.size() > 0 )
   {
     derivedAttributes.insert( tr( "(clicked coordinate)" ), point.toString() );
-    QgsDebugMsg ("TODO add geometry ?");
+    QgsDebugMsg( "TODO" );
     //results()->addFeature( layer, type, attributes, derivedAttributes, geometry );
-    mResultData.mRasterResults.append( RasterResult(layer, type, attributes, derivedAttributes));
+    //mResultData.mRasterResults.append( RasterResult(layer, type, attributes, derivedAttributes));
   }
 
   return res;
@@ -533,12 +522,12 @@ void QgsMapToolIdentify::convertMeasurement( QgsDistanceArea &calc, double &meas
 
 QGis::UnitType QgsMapToolIdentify::displayUnits()
 {
-    return mCanvas->mapUnits();
+  return mCanvas->mapUnits();
 }
 
 QgsMapToolIdentify::IdentifyResults &QgsMapToolIdentify::results()
 {
-    return mResultData;
+  return mResultData;
 }
 
 void QgsMapToolIdentify::formatChanged( QgsRasterLayer *layer )

@@ -105,7 +105,6 @@ class QgsIdentifyResultsDialog: public QDialog, private Ui::QgsIdentifyResultsBa
     /** Add add feature from vector layer */
     void addFeature( QgsVectorLayer *layer,
                      const QgsFeature &f,
-                     const QgsCoordinateReferenceSystem &crs,
                      const QMap< QString, QString > &derivedAttributes );
 
     /** Add add feature from other layer */
@@ -114,9 +113,7 @@ class QgsIdentifyResultsDialog: public QDialog, private Ui::QgsIdentifyResultsBa
                      const QMap< QString, QString > &attributes,
                      const QMap< QString, QString > &derivedAttributes,
                      const QgsFields &fields = QgsFields(),
-                     const QgsFeature &feature = QgsFeature(),
-                     const QgsCoordinateReferenceSystem &crs = QgsCoordinateReferenceSystem() );
-    //const QgsGeometry geometry );
+                     const QgsFeature &feature = QgsFeature() );
 
     /** map tool was deactivated */
     void deactivate();

@@ -65,6 +65,7 @@ SET(QGIS_CORE_SRCS
   qgsfeature.cpp
   qgsfeatureiterator.cpp
   qgsfeaturerequest.cpp
+  qgsfeaturestore.cpp
   qgsfield.cpp
   qgsgeometry.cpp
   qgsgeometryvalidator.cpp
@@ -385,6 +386,7 @@ SET(QGIS_CORE_HDRS
   qgsfeature.h
   qgsfeatureiterator.h
   qgsfeaturerequest.h
+  qgsfeaturestore.h
   qgsfield.h
   qgsgeometry.h
   qgsgml.h

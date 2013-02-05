@@ -29,6 +29,7 @@
 #include "qgswmsconnection.h"
 #include "qgscoordinatetransform.h"
 #include "qgsdatasourceuri.h"
+#include "qgsfeaturestore.h"
 #include "qgsrasterlayer.h"
 #include "qgsrectangle.h"
 #include "qgscoordinatereferencesystem.h"
@@ -4075,31 +4076,27 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
         QList<QgsField> fieldList = gmlSchema.fields( featureTypeName );
         QgsDebugMsg( QString( "%1 fields found" ).arg( fieldList.size() ) );
         QgsFields fields;
-        //QMap<QString, QPair<int, QgsField> > thematicAttributes;
-        for ( int i; i < fieldList.size(); i++ )
+        for ( int i = 0; i < fieldList.size(); i++ )
         {
           fields.append( fieldList[i] );
         }
         QgsGml gml( featureTypeName, geometryAttribute, fields );
         // TODO: avoid converting to string and back
-        //int ret = dataReader.getWFSData( mIdentifyResultBodies.value( gmlPart ), &wkbType );
-        //int ret = gml.getWFSData( mIdentifyResultBodies.value( gmlPart ), &wkbType );
         int ret = gml.getFeatures( mIdentifyResultBodies.value( gmlPart ), &wkbType );
         QgsDebugMsg( QString( "parsing result = %1" ).arg( ret ) );
 
         QMap<QgsFeatureId, QgsFeature* > features = gml.featuresMap();
         QgsDebugMsg( QString( "%1 features read" ).arg( features.size() ) );
-        QgsRasterFeatureList featureList;
+        QgsFeatureStore featureStore( fields, crs() );
         foreach ( QgsFeatureId id, features.keys() )
         {
           QgsFeature * feature = features.value( id );
 
           QgsDebugMsg( QString( "feature id = %1 : %2 attributes" ).arg( id ).arg( feature->attributes().size() ) );
 
-          QgsRasterFeature rasterFeature = QgsRasterFeature( *feature, fields );
-          featureList.append( rasterFeature );
+          featureStore.features().append( QgsFeature( *feature ) );
         }
-        results.insert( count, qVariantFromValue( featureList ) );
+        results.insert( count, qVariantFromValue( featureStore ) );
       }
     }
     count++;

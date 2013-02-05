@@ -20,6 +20,7 @@
 #include "qgsmaptool.h"
 #include "qgspoint.h"
 #include "qgsfeature.h"
+#include "qgsfield.h"
 #include "qgsdistancearea.h"
 #include "qgsmaplayer.h"
 
@@ -72,10 +73,12 @@ class GUI_EXPORT QgsMapToolIdentify : public QgsMapTool
     struct RasterResult
     {
       RasterResult() {}
-      RasterResult( QgsRasterLayer * layer, QString label, QMap< QString, QString > attributes, QMap< QString, QString > derivedAttributes ):
-          mLayer( layer ), mLabel( label ), mAttributes( attributes ), mDerivedAttributes( derivedAttributes )  {}
+      RasterResult( QgsRasterLayer * layer, QString label, QgsFields fields, QgsFeature feature, QMap< QString, QString > derivedAttributes ):
+          mLayer( layer ), mLabel( label ), mFields( fields ), mFeature( feature ), mDerivedAttributes( derivedAttributes )  {}
       QgsRasterLayer* mLayer;
       QString mLabel;
+      QgsFields mFields;
+      QgsFeature mFeature;
       QMap< QString, QString > mAttributes;
       QMap< QString, QString > mDerivedAttributes;
     };
