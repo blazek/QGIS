@@ -138,9 +138,6 @@ class GUI_EXPORT QgsMapToolIdentify : public QgsMapTool
 
   public slots:
     void formatChanged( QgsRasterLayer *layer );
-    //void handleCopyToClipboard( const QgsFieldMap &fields, const QgsFeatureList &features, const QgsCoordinateReferenceSystem &crs );
-    //void handleCopyToClipboard( const QgsFeatureStore & );
-
 
   signals:
     void identifyProgress( int, int );
@@ -161,7 +158,6 @@ class GUI_EXPORT QgsMapToolIdentify : public QgsMapTool
 
     bool identify( QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel, IdentifyMode mode,  QList<QgsMapLayer*> layerList, LayerType layerType = AllLayers );
 
-    //bool identifyLayer( QgsMapLayer *layer, int x, int y, LayerType layerType = AllLayers );
     bool identifyLayer( QgsMapLayer *layer, QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel, LayerType layerType = AllLayers );
     bool identifyRasterLayer( QgsRasterLayer *layer, QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel, QList<RasterResult>& rasterResults );
     bool identifyVectorLayer( QgsVectorLayer *layer, QgsPoint point );

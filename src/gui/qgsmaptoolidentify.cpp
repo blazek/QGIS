@@ -271,8 +271,6 @@ bool QgsMapToolIdentify::identifyVectorLayer( QgsVectorLayer *layer, QgsPoint po
 
     derivedAttributes.insert( tr( "feature id" ), fid < 0 ? tr( "new feature" ) : FID_TO_STRING( fid ) );
 
-    QgsDebugMsg( "TODO: layer crs" );
-    //results()->addFeature( layer, layer->dataProvider()->fields(), *f_it, layer->crs(), derivedAttributes );
     mResultData.mVectorResults.append( VectorResult( layer, *f_it, derivedAttributes ) );
   }
 
@@ -463,6 +461,8 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
           // may be the same as sublayer. We try to avoid duplicities in label.
           QString sublayer = featureStore.params().value( "sublayer" ).toString();
           QString featureType = featureStore.params().value( "featureType" ).toString();
+          // Strip UMN MapServer '_feature'
+          featureType.remove( "_feature" );
           QStringList labels;
           if ( sublayer.compare( layer->name(), Qt::CaseInsensitive ) != 0 )
           {
@@ -472,7 +472,11 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
           {
             labels << featureType;
           }
-          rasterResults.append( RasterResult( layer, labels.join( " / " ), featureStore.fields(), feature, derivedAttributes ) );
+
+          QMap< QString, QString > derAttributes = derivedAttributes;
+          derAttributes.unite( featureDerivedAttributes( &feature, layer ) );
+
+          rasterResults.append( RasterResult( layer, labels.join( " / " ), featureStore.fields(), feature, derAttributes ) );
         }
       }
     }
@@ -483,16 +487,10 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
     foreach ( int bandNo, values.keys() )
     {
       QString value = values.value( bandNo ).toString();
-      //if ( format == QgsRasterDataProvider::IdentifyFormatText )
-      //{
-      //  value = "<pre>" + value + "</pre>";
-      //}
-
       attributes.clear();
       attributes.insert( "", value );
 
-      // TODO: get sublayer label
-      QString label = QString( "Sublayer %1" ).arg( bandNo );
+      QString label = layer->subLayers().value( bandNo );
       rasterResults.append( RasterResult( layer, label, attributes, derivedAttributes ) );
     }
   }

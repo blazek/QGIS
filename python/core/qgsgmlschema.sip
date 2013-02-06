@@ -22,8 +22,6 @@ class QgsGmlSchema: QObject
 
     QStringList typeNames() const;
 
-    //QMap<int, QgsField> fields();
-
     QList<QgsField> fields( const QString & typeName );
 
     QStringList geometryAttributes( const QString & typeName );

@@ -61,14 +61,12 @@ class QgsWebView : public QWebView
 class QgsIdentifyResultsFeatureItem: public QTreeWidgetItem
 {
   public:
-    //QgsIdentifyResultsFeatureItem( const QgsFieldMap &fields, const QgsFeature &feature, const QgsCoordinateReferenceSystem &crs, const QStringList & strings = QStringList() );
     QgsIdentifyResultsFeatureItem( const QgsFields &fields, const QgsFeature &feature, const QgsCoordinateReferenceSystem &crs, const QStringList & strings = QStringList() );
     QgsFields fields() const { return mFields; }
     QgsFeature feature() const { return mFeature; }
     QgsCoordinateReferenceSystem crs() { return mCrs; }
 
   private:
-    //QgsFieldMap mFields;
     QgsFields mFields;
     QgsFeature mFeature;
     QgsCoordinateReferenceSystem mCrs;
@@ -90,7 +88,6 @@ class QgsIdentifyResultsWebViewItem: public QObject, public QTreeWidgetItem
     QgsWebView *mWebView;
 };
 
-//class QgsIdentifyResults: public QDialog, private Ui::QgsIdentifyResultsBase
 class QgsIdentifyResultsDialog: public QDialog, private Ui::QgsIdentifyResultsBase
 {
     Q_OBJECT

@@ -424,9 +424,6 @@ void QgsIdentifyResultsDialog::addFeature( QgsRasterLayer *layer,
     layItem->setData( 0, Qt::UserRole, QVariant::fromValue( qobject_cast<QObject *>( layer ) ) );
     lstResults->addTopLevelItem( layItem );
 
-    // Add format combo box item
-    QTreeWidgetItem *formatItem = new QTreeWidgetItem( QStringList() << tr( "Format" ) );
-    layItem->addChild( formatItem );
     QComboBox *formatCombo = new QComboBox();
 
     // Add all supported formats, best first. Note that all providers should support
@@ -448,6 +445,9 @@ void QgsIdentifyResultsDialog::addFeature( QgsRasterLayer *layer,
 
     if ( formatCombo->count() > 1 )
     {
+      // Add format combo box item
+      QTreeWidgetItem *formatItem = new QTreeWidgetItem( QStringList() << tr( "Format" ) );
+      layItem->addChild( formatItem );
       lstResults->setItemWidget( formatItem, 1, formatCombo );
       connect( formatCombo, SIGNAL( currentIndexChanged( int ) ),
                this, SLOT( formatChanged( int ) ) );
@@ -462,7 +462,6 @@ void QgsIdentifyResultsDialog::addFeature( QgsRasterLayer *layer,
   }
 
   QgsIdentifyResultsFeatureItem *featItem = new QgsIdentifyResultsFeatureItem( fields, feature, layer->crs(), QStringList() << label << "" );
-  //featItem->setData( 0, Qt::UserRole, -1 ); // FID
   layItem->addChild( featItem );
 
   // add feature attributes
@@ -478,13 +477,9 @@ void QgsIdentifyResultsDialog::addFeature( QgsRasterLayer *layer,
       QTreeWidgetItem *attrItem = new QTreeWidgetItem( QStringList() << QString::number( i ) << attrs[i].toString() );
 
       attrItem->setData( 0, Qt::DisplayRole, fields[i].name() );
-      //attrItem->setData( 0, Qt::UserRole, fields[i].name() );
-      //attrItem->setData( 0, Qt::UserRole + 1, i );
 
       QVariant value = attrs[i];
       attrItem->setData( 1, Qt::DisplayRole, value );
-      //attrItem->setData( 1, Qt::UserRole, value );
-
       featItem->addChild( attrItem );
     }
   }
@@ -1063,7 +1058,6 @@ void QgsIdentifyResultsDialog::highlightFeature( QTreeWidgetItem *item )
   if ( !layer && !rlayer )
     return;
 
-  //QTreeWidgetItem *featItem = featureItem( item );
   QgsIdentifyResultsFeatureItem *featItem = dynamic_cast<QgsIdentifyResultsFeatureItem *>( featureItem( item ) );
   if ( !featItem )
     return;
@@ -1071,32 +1065,6 @@ void QgsIdentifyResultsDialog::highlightFeature( QTreeWidgetItem *item )
 
   if ( mHighlights.contains( featItem ) )
     return;
-
-  //QgsGeometry geometry;
-  if ( layer )
-  {
-    QgsFeatureId fid = STRING_TO_FID( featItem->data( 0, Qt::UserRole ) );
-
-    QgsFeature feat;
-    //if ( !layer->featureAtId( fid, feat, true, false ) )
-    if ( !layer->getFeatures( QgsFeatureRequest().setFilterFid( fid ).setSubsetOfAttributes( QgsAttributeList() ) ).nextFeature( feat ) )
-    {
-      return;
-    }
-
-    //if ( !feat.geometry() )
-    //{
-    //  return;
-    //}
-
-    //geometry = QgsGeometry( *feat.geometry() );
-  }
-  else // raster
-  {
-    //geometry = featItem->data( 0, Qt::UserRole + 1 ).value<QgsGeometry>();
-    //QgsDebugMsg( QString( "geometry.wkbType() = %1" ).arg( geometry.wkbType() ) );
-    //if ( geometry.wkbType() == QGis::WKBUnknown ) return;
-  }
 
   if ( !featItem->feature().geometry() || featItem->feature().geometry()->wkbType() == QGis::WKBUnknown ) return;
 
