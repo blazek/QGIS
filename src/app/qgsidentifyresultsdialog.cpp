@@ -1316,11 +1316,9 @@ void QgsIdentifyResultsDialog::on_mCopyToolButton_clicked( bool checked )
     return;
   }
 
-  //QgsFieldMap fields;
-  QgsFeatureList features;
-  features << item->feature();
-  //QgsCoordinateReferenceSystem crs;
-  emit copyToClipboard( item->fields(), features, item->crs() );
+  QgsFeatureStore featureStore( item->fields(), item->crs() );
+  featureStore.features().append( item->feature() );
+  emit copyToClipboard( featureStore );
 }
 
 void QgsIdentifyResultsDialog::formatChanged( int index )

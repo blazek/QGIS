@@ -66,16 +66,6 @@ void QgsMapToolIdentify::canvasPressEvent( QMouseEvent *e )
 void QgsMapToolIdentify::canvasReleaseEvent( QMouseEvent *e )
 {
   Q_UNUSED( e );
-  // TODO: no more used, save last point somewhere else
-  /*
-  if ( !mCanvas || mCanvas->isDrawing() )
-  {
-    return;
-  }
-
-  mLastPoint = mCanvas->getCoordinateTransform()->toMapCoordinates( e->x(), e->y() );
-  identify( mLastPoint );
-  */
 }
 
 bool QgsMapToolIdentify::identify( int x, int y, QList<QgsMapLayer *> layerList, IdentifyMode mode )
@@ -90,7 +80,6 @@ bool QgsMapToolIdentify::identify( int x, int y, IdentifyMode mode, LayerType la
 
 bool QgsMapToolIdentify::identify( int x, int y, IdentifyMode mode, QList<QgsMapLayer*> layerList, LayerType layerType )
 {
-  //mLastPoint = mCanvas->getCoordinateTransform()->toMapCoordinates( e->x(), e->y() );
   mLastPoint = mCanvas->getCoordinateTransform()->toMapCoordinates( x, y );
   mLastExtent = mCanvas->extent();
   mLastMapUnitsPerPixel = mCanvas->mapUnitsPerPixel();
@@ -126,7 +115,6 @@ bool QgsMapToolIdentify::identify( QgsPoint point, QgsRectangle viewExtent, doub
 
     QApplication::setOverrideCursor( Qt::WaitCursor );
 
-    //res = identifyLayer( layer, x, y, layerType );
     res = identifyLayer( layer, point, viewExtent, mapUnitsPerPixel, layerType );
   }
   else
@@ -157,7 +145,6 @@ bool QgsMapToolIdentify::identify( QgsPoint point, QgsRectangle viewExtent, doub
       if ( noIdentifyLayerIdList.contains( layer->id() ) )
         continue;
 
-      //if ( identifyLayer( layer, x, y, layerType ) )
       if ( identifyLayer( layer, point, viewExtent, mapUnitsPerPixel, layerType ) )
       {
         res = true;
@@ -185,14 +172,11 @@ void QgsMapToolIdentify::deactivate()
   QgsMapTool::deactivate();
 }
 
-//bool QgsMapToolIdentify::identifyLayer( QgsMapLayer *layer, int x, int y, LayerType layerType )
 bool QgsMapToolIdentify::identifyLayer( QgsMapLayer *layer, QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel, LayerType layerType )
 {
-  //QgsPoint point = mCanvas->getCoordinateTransform()->toMapCoordinates( x, y );
-
   if ( layer->type() == QgsMapLayer::RasterLayer && ( layerType == AllLayers || layerType == RasterLayer ) )
   {
-    return identifyRasterLayer( qobject_cast<QgsRasterLayer *>( layer ), point, viewExtent, mapUnitsPerPixel );
+    return identifyRasterLayer( qobject_cast<QgsRasterLayer *>( layer ), point, viewExtent, mapUnitsPerPixel, mResultData.mRasterResults );
   }
   else if ( layer->type() == QgsMapLayer::VectorLayer && ( layerType == AllLayers || layerType == VectorLayer ) )
   {
@@ -366,10 +350,9 @@ QMap< QString, QString > QgsMapToolIdentify::featureDerivedAttributes( QgsFeatur
   return derivedAttributes;
 }
 
-bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel )
+bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel, QList<RasterResult>& rasterResults )
 {
-  bool res = true;
-
+  QgsDebugMsg( "point = " + point.toString() );
   if ( !layer ) return false;
 
   QgsRasterDataProvider *dprovider = layer->dataProvider();
@@ -442,7 +425,7 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
 
   derivedAttributes.insert( tr( "(clicked coordinate)" ), point.toString() );
 
-  QString type = tr( "Raster" );
+  //QString type = tr( "Raster" );
   QgsGeometry geometry;
   if ( format == QgsRasterDataProvider::IdentifyFormatValue )
   {
@@ -460,27 +443,43 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
       }
       attributes.insert( dprovider->generateBandName( bandNo ), valueString );
     }
-    QgsDebugMsg( "TODO" );
-    //results()->addFeature( layer, type, attributes, derivedAttributes );
+    QString label = layer->name();
+    rasterResults.append( RasterResult( layer, label, attributes, derivedAttributes ) );
   }
   else if ( format == QgsRasterDataProvider::IdentifyFormatFeature )
   {
     foreach ( int i, values.keys() )
     {
-      QgsFeatureStore featureStore = values.value( i ).value<QgsFeatureStore>();
+      // list of feature stores for a single sublayer
+      QgsFeatureStoreList featureStoreList = values.value( i ).value<QgsFeatureStoreList>();
 
-      foreach ( QgsFeature feature, featureStore.features() )
+      foreach ( QgsFeatureStore featureStore, featureStoreList )
       {
-        attributes.clear();
-        // TODO label - sublayer or GML feature type?
-        QString label = "Raster";
-        mResultData.mRasterResults.append( RasterResult( layer, label, featureStore.fields(), feature, derivedAttributes ) );
+        foreach ( QgsFeature feature, featureStore.features() )
+        {
+          attributes.clear();
+          // WMS sublayer and feature type, a sublayer may contain multiple feature types.
+          // Sublayer name may be the same as layer name and feature type name
+          // may be the same as sublayer. We try to avoid duplicities in label.
+          QString sublayer = featureStore.params().value( "sublayer" ).toString();
+          QString featureType = featureStore.params().value( "featureType" ).toString();
+          QStringList labels;
+          if ( sublayer.compare( layer->name(), Qt::CaseInsensitive ) != 0 )
+          {
+            labels << sublayer;
+          }
+          if ( featureType.compare( sublayer, Qt::CaseInsensitive ) != 0 || labels.isEmpty() )
+          {
+            labels << featureType;
+          }
+          rasterResults.append( RasterResult( layer, labels.join( " / " ), featureStore.fields(), feature, derivedAttributes ) );
+        }
       }
     }
-    return true;
   }
   else // text or html
   {
+    QgsDebugMsg( QString( "%1 html or text values" ).arg( values.size() ) );
     foreach ( int bandNo, values.keys() )
     {
       QString value = values.value( bandNo ).toString();
@@ -492,20 +491,13 @@ bool QgsMapToolIdentify::identifyRasterLayer( QgsRasterLayer *layer, QgsPoint po
       attributes.clear();
       attributes.insert( "", value );
 
-      QgsDebugMsg( "TODO" );
-      //results()->addFeature( layer, type, attributes, derivedAttributes );
+      // TODO: get sublayer label
+      QString label = QString( "Sublayer %1" ).arg( bandNo );
+      rasterResults.append( RasterResult( layer, label, attributes, derivedAttributes ) );
     }
   }
 
-  if ( attributes.size() > 0 )
-  {
-    derivedAttributes.insert( tr( "(clicked coordinate)" ), point.toString() );
-    QgsDebugMsg( "TODO" );
-    //results()->addFeature( layer, type, attributes, derivedAttributes, geometry );
-    //mResultData.mRasterResults.append( RasterResult(layer, type, attributes, derivedAttributes));
-  }
-
-  return res;
+  return true;
 }
 
 void QgsMapToolIdentify::convertMeasurement( QgsDistanceArea &calc, double &measure, QGis::UnitType &u, bool isArea )
@@ -532,15 +524,9 @@ QgsMapToolIdentify::IdentifyResults &QgsMapToolIdentify::results()
 
 void QgsMapToolIdentify::formatChanged( QgsRasterLayer *layer )
 {
-  // TODO?: this is not perfect, it calls identify with last point, but other
-  // things could also change
   QgsDebugMsg( "Entered" );
-  //identify( mLastPoint );
-  identifyRasterLayer( layer, mLastPoint, mLastExtent, mLastMapUnitsPerPixel );
+  QList<RasterResult> rasterResults;
+  identifyRasterLayer( layer, mLastPoint, mLastExtent, mLastMapUnitsPerPixel, rasterResults );
+  emit changedRasterResults( rasterResults );
 }
 
-void QgsMapToolIdentify::handleCopyToClipboard( const QgsFieldMap &fields, const QgsFeatureList &features, const QgsCoordinateReferenceSystem &crs )
-{
-  QgsDebugMsg( "Entered" );
-  emit copyToClipboard( fields, features, crs );
-}

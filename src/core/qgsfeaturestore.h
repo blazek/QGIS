@@ -20,9 +20,9 @@
 #include "qgsfield.h"
 #include "qgslogger.h"
 #include "qgscoordinatereferencesystem.h"
-#include <QObject>
 #include <QList>
 #include <QMetaType>
+#include <QVariant>
 
 /** \ingroup core
  * Container for features with the same fields and crs.
@@ -55,16 +55,26 @@ class CORE_EXPORT QgsFeatureStore
     void setCrs( const QgsCoordinateReferenceSystem& crs ) { mCrs = crs; }
 
     /** Get features list reference */
-    QgsFeatureList& features() { return mFeatures; } 
+    QgsFeatureList& features() { return mFeatures; }
+
+    /** Get map of optional parameters */
+    QMap<QString, QVariant>& params() { return mParams; }
 
   private:
-    QgsFields mFields;    
+    QgsFields mFields;
 
     QgsCoordinateReferenceSystem mCrs;
-  
+
     QgsFeatureList mFeatures;
+
+    // Optional parameters
+    QMap<QString, QVariant> mParams;
 };
 
+typedef QList<QgsFeatureStore> QgsFeatureStoreList;
+
 Q_DECLARE_METATYPE( QgsFeatureStore );
+
+Q_DECLARE_METATYPE( QgsFeatureStoreList );
 
 #endif

@@ -73,6 +73,9 @@ class GUI_EXPORT QgsMapToolIdentify : public QgsMapTool
     struct RasterResult
     {
       RasterResult() {}
+      RasterResult( QgsRasterLayer * layer, QString label, QMap< QString, QString > attributes, QMap< QString, QString > derivedAttributes ):
+          mLayer( layer ), mLabel( label ), mAttributes( attributes ), mDerivedAttributes( derivedAttributes )  {}
+
       RasterResult( QgsRasterLayer * layer, QString label, QgsFields fields, QgsFeature feature, QMap< QString, QString > derivedAttributes ):
           mLayer( layer ), mLabel( label ), mFields( fields ), mFeature( feature ), mDerivedAttributes( derivedAttributes )  {}
       QgsRasterLayer* mLayer;
@@ -135,14 +138,14 @@ class GUI_EXPORT QgsMapToolIdentify : public QgsMapTool
 
   public slots:
     void formatChanged( QgsRasterLayer *layer );
-    void handleCopyToClipboard( const QgsFieldMap &fields, const QgsFeatureList &features, const QgsCoordinateReferenceSystem &crs );
+    //void handleCopyToClipboard( const QgsFieldMap &fields, const QgsFeatureList &features, const QgsCoordinateReferenceSystem &crs );
+    //void handleCopyToClipboard( const QgsFeatureStore & );
 
 
   signals:
     void identifyProgress( int, int );
     void identifyMessage( QString );
-    void copyToClipboard( const QgsFieldMap &fields, const QgsFeatureList &features, const QgsCoordinateReferenceSystem &crs );
-
+    void changedRasterResults( QList<RasterResult>& );
 
   private:
     /** Performs the identification.
@@ -160,7 +163,7 @@ class GUI_EXPORT QgsMapToolIdentify : public QgsMapTool
 
     //bool identifyLayer( QgsMapLayer *layer, int x, int y, LayerType layerType = AllLayers );
     bool identifyLayer( QgsMapLayer *layer, QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel, LayerType layerType = AllLayers );
-    bool identifyRasterLayer( QgsRasterLayer *layer, QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel );
+    bool identifyRasterLayer( QgsRasterLayer *layer, QgsPoint point, QgsRectangle viewExtent, double mapUnitsPerPixel, QList<RasterResult>& rasterResults );
     bool identifyVectorLayer( QgsVectorLayer *layer, QgsPoint point );
 
     //! Private helper

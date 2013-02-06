@@ -57,13 +57,12 @@ void QgsClipboard::replaceWithCopyOf( QgsVectorLayer *src )
   setSystemClipboard();
 }
 
-void QgsClipboard::replaceWithCopyOf( const QgsFieldMap &fields, const QgsFeatureList &features, const QgsCoordinateReferenceSystem &crs )
+void QgsClipboard::replaceWithCopyOf( QgsFeatureStore & featureStore )
 {
-  QgsDebugMsg( "Entered" );
-  QgsDebugMsg( "TODO" );
-  //mFeatureFields = fields;
-  mFeatureClipboard = features;
-  mCRS = crs;
+  QgsDebugMsg( QString( "features count = %1" ).arg( featureStore.features().size() ) );
+  mFeatureFields = featureStore.fields();
+  mFeatureClipboard = featureStore.features();
+  mCRS = featureStore.crs();
   setSystemClipboard();
 }
 

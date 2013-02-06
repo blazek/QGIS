@@ -20,6 +20,7 @@
 #include "qgsmaptoolidentify.h"
 #include "qgspoint.h"
 #include "qgsfeature.h"
+#include "qgsfeaturestore.h"
 #include "qgsfield.h"
 #include "qgsdistancearea.h"
 
@@ -62,9 +63,14 @@ class QgsMapToolIdentifyAction : public QgsMapToolIdentify
 
     virtual void deactivate();
 
+  public slots:
+    void handleCopyToClipboard( QgsFeatureStore & );
+    void handleChangedRasterResults( QList<RasterResult>& rasterResults );
+
   signals:
     void identifyProgress( int, int );
     void identifyMessage( QString );
+    void copyToClipboard( QgsFeatureStore & );
 
   private:
     void identify( QgsPoint point,  QgsRectangle viewExtent, double mapUnitsPerPixel );

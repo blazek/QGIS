@@ -23,6 +23,7 @@
 
 #include "qgsfield.h"
 #include "qgsfeature.h"
+#include "qgsfeaturestore.h"
 #include "qgscoordinatereferencesystem.h"
 
 /**
@@ -69,7 +70,7 @@ class QgsClipboard
      *  Place a copy of features on the internal clipboard,
      *  destroying the previous contents.
      */
-    void replaceWithCopyOf( const QgsFieldMap &fields, const QgsFeatureList &features, const QgsCoordinateReferenceSystem &crs );
+    void replaceWithCopyOf( QgsFeatureStore & featureStore );
 
     /*
      *  Returns a copy of features on the internal clipboard,

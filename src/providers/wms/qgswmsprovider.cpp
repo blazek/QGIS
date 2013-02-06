@@ -4043,15 +4043,7 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
       }
 
       QgsDebugMsg( "GML (first 2000 bytes):\n" + QString::fromUtf8( mIdentifyResultBodies.value( gmlPart ).left( 2000 ) ) );
-      QgsRectangle extent;
-      //QMap<QgsFeatureId, QgsFeature* > features;
-      //QMap<QgsFeatureId, QString > idMap;
-      //QString geometryAttribute;
-      //QMap<QString, QPair<int, QgsField> > thematicAttributes;
       QGis::WkbType wkbType;
-      //QString uri;
-      //QgsWFSData dataReader( uri, &extent, features, idMap, geometryAttribute, thematicAttributes, &wkbType );
-      //QgsWFSData dataReader;
       QgsGmlSchema gmlSchema;
 
       if ( xsdPart >= 0 )  // XSD available
@@ -4064,10 +4056,18 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
         gmlSchema.guessSchema( mIdentifyResultBodies.value( gmlPart ) );
       }
 
-      //QgsFieldMap fields = dataReader.fields();
       QStringList featureTypeNames = gmlSchema.typeNames();
       QgsDebugMsg( QString( "%1 featureTypeNames found" ).arg( featureTypeNames.size() ) );
 
+      // Each sublayer may have more features of different types, for example
+      // if GROUP of multiple vector layers is used with UMN MapServer
+      // Note: GROUP of layers in UMN MapServer is not queryable by default
+      // (and I could not find a way to force it), it is possible however
+      // to add another RASTER layer with the same name as group which is queryable
+      // and has no DATA defined. Then such a layer may be add to QGIS and both
+      // GetMap and GetFeatureInfo will return data for the group of the same name.
+      // https://github.com/mapserver/mapserver/issues/318#issuecomment-4923208
+      QgsFeatureStoreList featureStoreList;
       foreach ( QString featureTypeName, featureTypeNames )
       {
         QgsDebugMsg( QString( "featureTypeName = %1" ).arg( featureTypeName ) );
@@ -4088,6 +4088,8 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
         QMap<QgsFeatureId, QgsFeature* > features = gml.featuresMap();
         QgsDebugMsg( QString( "%1 features read" ).arg( features.size() ) );
         QgsFeatureStore featureStore( fields, crs() );
+        featureStore.params().insert( "sublayer", *layers );
+        featureStore.params().insert( "featureType", featureTypeName );
         foreach ( QgsFeatureId id, features.keys() )
         {
           QgsFeature * feature = features.value( id );
@@ -4096,8 +4098,9 @@ QMap<int, QVariant> QgsWmsProvider::identify( const QgsPoint & thePoint, Identif
 
           featureStore.features().append( QgsFeature( *feature ) );
         }
-        results.insert( count, qVariantFromValue( featureStore ) );
+        featureStoreList.append( featureStore );
       }
+      results.insert( count, qVariantFromValue( featureStoreList ) );
     }
     count++;
   }

@@ -20,15 +20,16 @@ QgsFeatureStore::QgsFeatureStore( )
 }
 
 QgsFeatureStore::QgsFeatureStore( const QgsFeatureStore &rhs )
-  : mFields(rhs.mFields)
-  , mCrs(rhs.mCrs)
-  , mFeatures(rhs.mFeatures)
+    : mFields( rhs.mFields )
+    , mCrs( rhs.mCrs )
+    , mFeatures( rhs.mFeatures )
+    , mParams( rhs.mParams )
 {
 }
 
-QgsFeatureStore::QgsFeatureStore( const QgsFields& fields, const QgsCoordinateReferenceSystem& crs ) 
-  : mFields ( fields )
-  , mCrs( crs )
+QgsFeatureStore::QgsFeatureStore( const QgsFields& fields, const QgsCoordinateReferenceSystem& crs )
+    : mFields( fields )
+    , mCrs( crs )
 {
 }
 

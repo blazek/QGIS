@@ -22,6 +22,7 @@
 #include "qgsattributeaction.h"
 #include "qgscontexthelp.h"
 #include "qgsfeature.h"
+#include "qgsfeaturestore.h"
 #include "qgsfield.h"
 #include "qgscoordinatereferencesystem.h"
 
@@ -129,8 +130,7 @@ class QgsIdentifyResultsDialog: public QDialog, private Ui::QgsIdentifyResultsBa
     // Emited when raster identify format of a layer changed
     void formatChanged( QgsRasterLayer *layer );
 
-    //void copyToClipboard( const QgsFieldMap &fields, const QgsFeatureList &features, const QgsCoordinateReferenceSystem &crs );
-    void copyToClipboard( const QgsFields &fields, const QgsFeatureList &features, const QgsCoordinateReferenceSystem &crs );
+    void copyToClipboard( QgsFeatureStore& featureStore );
 
   public slots:
     /** Remove results */
