@@ -430,6 +430,7 @@ QgisApp *QgisApp::smInstance = 0;
 QgisApp::QgisApp( QSplashScreen *splash, bool restorePlugins, QWidget * parent, Qt::WFlags fl )
     : QMainWindow( parent, fl )
     , mSplash( splash )
+    , mInternalClipboard( 0 )
     , mShowProjectionTab( false )
     , mPythonUtils( NULL )
 #ifdef Q_OS_WIN
@@ -529,7 +530,6 @@ QgisApp::QgisApp( QSplashScreen *splash, bool restorePlugins, QWidget * parent, 
   updateProjectFromTemplates();
   legendLayerSelectionChanged();
   mSaveRollbackInProgress = false;
-  activateDeactivateLayerRelatedActions( NULL );
 
   // initialize the plugin manager
   mPluginManager = new QgsPluginManager( this, restorePlugins );
@@ -582,6 +582,8 @@ QgisApp::QgisApp( QSplashScreen *splash, bool restorePlugins, QWidget * parent, 
   // add this window to Window menu
   addWindow( mWindowAction );
 #endif
+
+  activateDeactivateLayerRelatedActions( NULL ); // after members were created
 
   // set application's caption
   QString caption = tr( "QGIS - %1 ('%2')" ).arg( QGis::QGIS_VERSION ).arg( QGis::QGIS_RELEASE_NAME );
@@ -929,6 +931,8 @@ void QgisApp::createActions()
   connect( mActionCutFeatures, SIGNAL( triggered() ), this, SLOT( editCut() ) );
   connect( mActionCopyFeatures, SIGNAL( triggered() ), this, SLOT( editCopy() ) );
   connect( mActionPasteFeatures, SIGNAL( triggered() ), this, SLOT( editPaste() ) );
+  connect( mActionPasteAsNewVector, SIGNAL( triggered() ), this, SLOT( pasteAsNewVector() ) );
+  connect( mActionPasteAsNewMemoryVector, SIGNAL( triggered() ), this, SLOT( pasteAsNewMemoryVector() ) );
   connect( mActionCopyStyle, SIGNAL( triggered() ), this, SLOT( copyStyle() ) );
   connect( mActionPasteStyle, SIGNAL( triggered() ), this, SLOT( pasteStyle() ) );
   connect( mActionAddFeature, SIGNAL( triggered() ), this, SLOT( addFeature() ) );
@@ -4467,7 +4471,7 @@ void QgisApp::saveSelectionAsVectorFile()
   saveAsVectorFileGeneral( true );
 }
 
-void QgisApp::saveAsVectorFileGeneral( bool saveOnlySelection )
+void QgisApp::saveAsVectorFileGeneral( bool saveOnlySelection, QgsVectorLayer* vlayer, bool symbologyOption )
 {
   if ( mMapCanvas && mMapCanvas->isDrawing() )
     return;
@@ -4475,13 +4479,23 @@ void QgisApp::saveAsVectorFileGeneral( bool saveOnlySelection )
   if ( !mMapLegend )
     return;
 
-  QgsVectorLayer *vlayer = qobject_cast<QgsVectorLayer *>( activeLayer() ); // FIXME: output of multiple layers at once?
+  if ( !vlayer )
+  {
+    vlayer = qobject_cast<QgsVectorLayer *>( activeLayer() ); // FIXME: output of multiple layers at once?
+  }
+
   if ( !vlayer )
     return;
 
   QgsCoordinateReferenceSystem destCRS;
 
-  QgsVectorLayerSaveAsDialog *dialog = new QgsVectorLayerSaveAsDialog( vlayer->crs().srsid(), this );
+  int options = QgsVectorLayerSaveAsDialog::AllOptions;
+  if ( !symbologyOption )
+  {
+    options &= ~QgsVectorLayerSaveAsDialog::Symbology;
+  }
+
+  QgsVectorLayerSaveAsDialog *dialog = new QgsVectorLayerSaveAsDialog( vlayer->crs().srsid(), options, this );
 
   if ( dialog->exec() == QDialog::Accepted )
   {
@@ -4543,7 +4557,6 @@ void QgisApp::saveAsVectorFileGeneral( bool saveOnlySelection )
 
   delete dialog;
 }
-
 
 void QgisApp::layerProperties()
 {
@@ -5439,6 +5452,137 @@ void QgisApp::editPaste( QgsMapLayer *destinationLayer )
   pasteVectorLayer->addFeatures( features );
   pasteVectorLayer->endEditCommand();
   mMapCanvas->refresh();
+}
+
+void QgisApp::pasteAsNewVector()
+{
+  if ( mMapCanvas && mMapCanvas->isDrawing() ) return;
+
+  QgsVectorLayer * layer = pasteToNewMemoryVector();
+  if ( !layer ) return;
+
+  saveAsVectorFileGeneral( false, layer, false );
+
+  delete layer;
+}
+
+void QgisApp::pasteAsNewMemoryVector()
+{
+  if ( mMapCanvas && mMapCanvas->isDrawing() ) return;
+
+  QgsVectorLayer * layer = pasteToNewMemoryVector();
+  if ( !layer ) return;
+
+  mMapCanvas->freeze();
+
+  QgsMapLayerRegistry::instance()->addMapLayer( layer );
+
+  mMapCanvas->freeze( false );
+  mMapCanvas->refresh();
+
+  qApp->processEvents();
+}
+
+QgsVectorLayer * QgisApp::pasteToNewMemoryVector()
+{
+  // Decide geometry type from features, switch to multi type if at least one multi is found
+  QMap<QGis::WkbType, int> typeCounts;
+  QgsFeatureList features = clipboard()->copyOf();
+  for ( int i = 0; i < features.size(); i++ )
+  {
+    QgsFeature &feature = features[i];
+    if ( !feature.geometry() ) continue;
+    QGis::WkbType type = QGis::flatType( feature.geometry()->wkbType() );
+
+    if ( type == QGis::WKBUnknown || type == QGis::WKBNoGeometry ) continue;
+    if ( QGis::isSingleType( type ) )
+    {
+      if ( typeCounts.contains( QGis::multiType( type ) ) )
+      {
+        typeCounts[ QGis::multiType( type )] = typeCounts[ QGis::multiType( type )] + 1;
+      }
+      else
+      {
+        typeCounts[ type ] = typeCounts[ type ] + 1;
+      }
+    }
+    else if ( QGis::isMultiType( type ) )
+    {
+      if ( typeCounts.contains( QGis::singleType( type ) ) )
+      {
+        // switch to multi type
+        typeCounts[type] = typeCounts[ QGis::singleType( type )];
+        typeCounts.remove( QGis::singleType( type ) );
+      }
+      typeCounts[type] = typeCounts[type] + 1;
+    }
+  }
+
+  QGis::WkbType wkbType = typeCounts.size() > 0 ? typeCounts.keys().value( 0 ) : QGis::WKBPoint;
+
+  QString typeName = QString( QGis::featureType( wkbType ) ).replace( "WKB", "" );
+
+  QString message;
+
+  if ( features.size() == 0 )
+  {
+    message = tr( "No features in clipboard." ); // should not happen
+  }
+  else if ( typeCounts.size() == 0 )
+  {
+    message = tr( "No features with geometry found, point type layer will be created." );
+  }
+  else if ( typeCounts.size() > 1 )
+  {
+    message = tr( "Multiple geometry types found, features with geometry different from %1 will be created without geometry." ).arg( typeName );
+  }
+
+  if ( !message.isEmpty() )
+  {
+    QMessageBox::warning( this, tr( "Warning" ), message , QMessageBox::Ok );
+  }
+
+  QgsVectorLayer * layer = new QgsVectorLayer( typeName, "pasted_features", "memory" );
+
+  if ( !layer->isValid() || !layer->dataProvider() )
+  {
+    delete layer;
+    QMessageBox::warning( this, tr( "Warning" ), tr( "Cannot create new layer" ), QMessageBox::Ok );
+    return 0;
+  }
+
+  layer->startEditing();
+  layer->setCrs( clipboard()->crs(), false );
+
+  foreach ( QgsField f, clipboard()->fields().toList() )
+  {
+    layer->addAttribute( f );
+  }
+
+  // Convert to multi if necessary
+  for ( int i = 0; i < features.size(); i++ )
+  {
+    QgsFeature &feature = features[i];
+    if ( !feature.geometry() ) continue;
+    QGis::WkbType type = QGis::flatType( feature.geometry()->wkbType() );
+    if ( type == QGis::WKBUnknown || type == QGis::WKBNoGeometry ) continue;
+
+    QgsDebugMsg( QString( "type = %1" ).arg( type ) );
+
+    if ( QGis::singleType( wkbType ) != QGis::singleType( type ) )
+    {
+      feature.setGeometry( 0 );
+    }
+
+    if ( QGis::isMultiType( wkbType ) &&  QGis::isSingleType( type ) )
+    {
+      feature.geometry()->convertToMultiType();
+    }
+  }
+  layer->addFeatures( features );
+  layer->commitChanges();
+
+  return layer;
 }
 
 void QgisApp::copyStyle( QgsMapLayer * sourceLayer )
@@ -7903,6 +8047,7 @@ void QgisApp::activateDeactivateLayerRelatedActions( QgsMapLayer* layer )
   mActionMoveLabel->setEnabled( enableMove );
   mActionRotateLabel->setEnabled( enableRotate );
   mActionChangeLabelProperties->setEnabled( enableChange );
+  mMenuPasteAs->setEnabled( clipboard() && !clipboard()->empty() );
 
   updateLayerModifiedActions();
 
@@ -7936,6 +8081,7 @@ void QgisApp::activateDeactivateLayerRelatedActions( QgsMapLayer* layer )
     mActionCutFeatures->setEnabled( false );
     mActionCopyFeatures->setEnabled( false );
     mActionPasteFeatures->setEnabled( false );
+    mMenuPasteAs->setEnabled( false );
     mActionCopyStyle->setEnabled( false );
     mActionPasteStyle->setEnabled( false );
 
