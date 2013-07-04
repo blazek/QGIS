@@ -1120,6 +1120,8 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
     void osmImportDialog();
     void osmExportDialog();
 
+    void clipboardChanged();
+
   signals:
     /** emitted when a key is pressed and we want non widget sublasses to be able
       to pick up on this (e.g. maplayer) */

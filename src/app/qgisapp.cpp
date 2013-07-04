@@ -572,6 +572,7 @@ QgisApp::QgisApp( QSplashScreen *splash, bool restorePlugins, QWidget * parent, 
   mLogDock->hide();
 
   mInternalClipboard = new QgsClipboard; // create clipboard
+  connect( mInternalClipboard, SIGNAL( changed() ), this, SLOT( clipboardChanged() ) );
   mQgisInterface = new QgisAppInterface( this ); // create the interfce
 
 #ifdef Q_WS_MAC
@@ -5385,7 +5386,6 @@ void QgisApp::editCut( QgsMapLayer * layerContainingSelection )
   selectionVectorLayer->beginEditCommand( tr( "Features cut" ) );
   selectionVectorLayer->deleteSelectedFeatures();
   selectionVectorLayer->endEditCommand();
-  activateDeactivateLayerRelatedActions( activeLayer() );
 }
 
 void QgisApp::editCopy( QgsMapLayer * layerContainingSelection )
@@ -5401,9 +5401,12 @@ void QgisApp::editCopy( QgsMapLayer * layerContainingSelection )
 
   // Test for feature support in this layer
   clipboard()->replaceWithCopyOf( selectionVectorLayer );
-  activateDeactivateLayerRelatedActions( activeLayer() );
 }
 
+void QgisApp::clipboardChanged()
+{
+  activateDeactivateLayerRelatedActions( activeLayer() );
+}
 
 void QgisApp::editPaste( QgsMapLayer *destinationLayer )
 {
