@@ -43,6 +43,11 @@ class QgsGrassFeatureSource : public QgsAbstractFeatureSource
     QgsFields mFields;
     QTextCodec* mEncoding;
 
+    bool mEditing; // Standard QGIS editing mode 
+    // TODO: probably keep fid mapping in provider?
+    QHash<int,int> mEditFidHash;
+    QHash<int,QgsFeature> mChangedFeatures;
+
     friend class QgsGrassFeatureIterator;
 };
 

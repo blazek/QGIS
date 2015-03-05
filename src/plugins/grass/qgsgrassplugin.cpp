@@ -17,9 +17,11 @@
 #include "qgsgrassplugin.h"
 #include "qgis.h"
 #include "qgsgrass.h"
+#include "qgsgrassprovider.h"
 
 //the gui subclass
 #include "qgsgrassedit.h"
+#include "qgsgrasseditrenderer.h"
 #include "qgsgrassnewmapset.h"
 #include "qgsgrassregion.h"
 #include "qgsgrassselect.h"
@@ -33,6 +35,7 @@
 #include "qgsmapcanvas.h"
 #include "qgsrubberband.h"
 #include "qgsproject.h"
+#include "qgsrendererv2registry.h"
 #include "qgsvectorlayer.h"
 #include "qgsmaplayerregistry.h"
 
@@ -239,7 +242,57 @@ void QgsGrassPlugin::initGui()
   mRegionBand->setColor( mRegionPen.color() );
   mRegionBand->setWidth( mRegionPen.width() );
 
+  // Connect start/stop editing
+  connect( QgsMapLayerRegistry::instance(), SIGNAL( layerWasAdded( QgsMapLayer* ) ), this, SLOT( layerWasAdded( QgsMapLayer* ) ) );
+
   mapsetChanged();
+}
+
+void QgsGrassPlugin::layerWasAdded( QgsMapLayer* theMapLayer )
+{
+  QgsDebugMsg( "name = " + theMapLayer->name() );
+  QgsVectorLayer *vectorLayer = qobject_cast<QgsVectorLayer *>( theMapLayer );
+  if ( !vectorLayer )
+    return;
+  QgsGrassProvider* grassProvider = dynamic_cast<QgsGrassProvider*>( vectorLayer->dataProvider() );
+  if ( !grassProvider )
+    return;
+
+  QgsDebugMsg( "connect editing");
+  connect( vectorLayer, SIGNAL( editingStarted() ), this, SLOT( layerEditingStarted() ) );
+}
+
+void QgsGrassPlugin::layerEditingStarted()
+{
+  QgsDebugMsg( "Entered");
+  QgsVectorLayer *vectorLayer = qobject_cast<QgsVectorLayer *>( sender() );
+  if ( !vectorLayer )
+    return;
+  QgsDebugMsg( "started editing of layer " + vectorLayer->name());
+
+  // Set editing renderer
+  QgsGrassProvider* grassProvider = dynamic_cast<QgsGrassProvider*>( vectorLayer->dataProvider() );
+  if ( !grassProvider )
+    return;
+
+  QgsRendererV2Registry::instance()->addRenderer( new QgsRendererV2Metadata( "grassEdit",
+                                          QObject::tr( "GRASS Edit" ),
+                                          //QgsGrassEditRenderer::create,
+                                          //QgsGrassEditRenderer::createFromSld ) );
+                                          0, 0, QIcon(),
+                                          QgsGrassEditRendererWidget::create
+                                      ) );
+
+
+  QgsGrassEditRenderer *renderer = new QgsGrassEditRenderer();
+
+  //QgsSymbolV2 * lineSymbol = QgsSymbolV2::defaultSymbol( QGis::Line );
+  //QgsFeatureRendererV2 * renderer = QgsFeatureRendererV2::defaultRenderer( QGis::Line );
+
+  grassProvider->startEdit();
+  grassProvider->startEditing( vectorLayer->editBuffer() ); 
+  vectorLayer->updateFields();
+  vectorLayer->setRendererV2( renderer );
 }
 
 void QgsGrassPlugin::mapsetChanged()

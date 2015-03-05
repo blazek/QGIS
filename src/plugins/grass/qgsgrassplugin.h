@@ -28,6 +28,7 @@ class QgsGrassRegion;
 class QgsGrassEdit;
 
 class QgsMapCanvas;
+class QgsMapLayer;
 class QgsRubberBand;
 
 class QAction;
@@ -135,6 +136,9 @@ class QgsGrassPlugin : public QObject, public QgisPlugin
     void setCurrentTheme( QString theThemeName );
     void setTransform();
     void editClosed();
+
+    void layerWasAdded( QgsMapLayer* theMapLayer );
+    void layerEditingStarted();
   private:
     //! Name of the plugin
     QString pluginNameQString;

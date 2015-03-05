@@ -210,7 +210,7 @@
   <customwidget>
    <class>QgsColorRampComboBox</class>
    <extends>QComboBox</extends>
-   <header>qgscolorrampcombobox.h</header>
+   <header>symbology-ng/qgscolorrampcombobox.h</header>
   </customwidget>
   <customwidget>
    <class>QgsFieldExpressionWidget</class>

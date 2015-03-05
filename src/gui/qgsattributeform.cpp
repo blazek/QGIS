@@ -162,6 +162,7 @@ bool QgsAttributeForm::save()
       QgsEditorWidgetWrapper* eww = qobject_cast<QgsEditorWidgetWrapper*>( ww );
       if ( eww )
       {
+        QgsDebugMsg( QString( QString( "fieldIdx() = %1 field name = %2").arg(eww->fieldIdx()).arg(eww->field().name())));
         QVariant dstVar = dst[eww->fieldIdx()];
         QVariant srcVar = eww->value();
         // need to check dstVar.isNull() != srcVar.isNull()

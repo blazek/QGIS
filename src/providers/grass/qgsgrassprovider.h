@@ -18,6 +18,7 @@
 
 class QgsFeature;
 class QgsField;
+class QgsVectorLayerEditBuffer;
 
 class QgsGrassFeatureIterator;
 
@@ -117,10 +118,27 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
     Q_OBJECT
 
   public:
+    enum TopoSymbol
+    { 
+      TopoUndefined = 0,
+      TopoPoint,
+      TopoLine,
+      TopoBoundary0,
+      TopoBoundary1,
+      TopoBoundary2,
+      TopoCentroidIn,
+      TopoCentroidOut,
+      TopoCentroidDupl,
+      TopoNode0,
+      TopoNode1,
+      TopoNode2
+    };
 
     QgsGrassProvider( QString uri = QString() );
 
     virtual ~QgsGrassProvider();
+
+    virtual int capabilities() const override;
 
     virtual QgsAbstractFeatureSource* featureSource() const override;
 
@@ -208,6 +226,9 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
      *   @return false is not frozen
      */
     bool startEdit();
+
+    /* Start standard QGIS editing */
+    void startEditing( QgsVectorLayerEditBuffer* buffer );
 
     /** Freeze vector.
      */
@@ -489,10 +510,6 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
     */
     QString description() const override;
 
-
-
-
-
     // Layer type (layerType)
     enum TYPE      // layer name:
     {
@@ -508,6 +525,9 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
       TOPO_LINE,   // all lines with topology id
       TOPO_NODE    // topology nodes
     };
+
+  public slots:
+    void bufferGeometryChanged( QgsFeatureId fid, QgsGeometry &geom );
 
   private:
     QString mGisdbase;      // map gisdabase
@@ -651,10 +671,23 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
     /** Fields used for topo layers */
     QgsFields mTopoFields;
 
+    QgsFields mEditFields;
+
     friend class QgsGrassFeatureSource;
     friend class QgsGrassFeatureIterator;
 
     static int cmpAtt( const void *a, const void *b );
+
+    /** Editing using standard QGIS tools */
+    bool mEditing;
+
+    QgsVectorLayerEditBuffer* mEditBuffer;
+
+    // new (after line rewrite) -> old fid mapping
+    QHash<int,int> mEditFidHash;
+
+    // hash of rewritten (deleted) features
+    QHash<int,QgsFeature> mChangedFeatures;
 };
 
 #endif // QGSGRASSPROVIDER_H

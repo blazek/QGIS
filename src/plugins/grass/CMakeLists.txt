@@ -22,6 +22,7 @@ SET (GRASS_PLUGIN_SRCS
      qgsgrassselect.cpp
      qgsgrassbrowser.cpp
      qgsgrassedit.cpp
+     qgsgrasseditrenderer.cpp
      qgsgrassedittools.cpp
      qgsgrasstools.cpp
      qgsgrassmodel.cpp
@@ -51,6 +52,7 @@ SET (GRASS_PLUGIN_MOC_HDRS
      qgsgrassselect.h
      qgsgrassbrowser.h
      qgsgrassedit.h
+     qgsgrasseditrenderer.h
      qgsgrasstools.h
      qgsgrassmodel.h
      qgsgrassmapcalc.h
@@ -139,6 +141,7 @@ INCLUDE_DIRECTORIES(
      ${CMAKE_CURRENT_BINARY_DIR}
      ../../core
      ../../core/raster
+     ../../core/symbology-ng
      ../../gui
      ../../providers/grass
      ${CMAKE_CURRENT_BINARY_DIR}/../../ui

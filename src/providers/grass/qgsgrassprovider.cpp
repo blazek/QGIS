@@ -26,6 +26,7 @@
 #include "qgsfeature.h"
 #include "qgsfield.h"
 #include "qgsrectangle.h"
+#include "qgsvectorlayereditbuffer.h"
 
 #include "qgsgrass.h"
 #include "qgsgrassprovider.h"
@@ -85,6 +86,8 @@ QgsGrassProvider::QgsGrassProvider( QString uri )
     , mCidxFieldIndex( -1 )
     , mCidxFieldNumCats( 0 )
     , mNumberFeatures( 0 )
+    , mEditing(false)
+    , mEditBuffer(0)
 {
   QgsDebugMsg( QString( "QgsGrassProvider URI: %1" ).arg( uri ) );
 
@@ -221,11 +224,19 @@ QgsGrassProvider::QgsGrassProvider( QString uri )
   loadMapInfo();
   setTopoFields();
 
+  mEditFields = QgsFields( mLayers[mLayerId].fields );
+  mEditFields.append( QgsField( "topo_symbol", QVariant::Int ) );
+
   mMapVersion = mMaps[mLayers[mLayerId].mapId].version;
 
   mValid = true;
 
   QgsDebugMsg( QString( "New GRASS layer opened, time (ms): %1" ).arg( time.elapsed() ) );
+}
+
+int QgsGrassProvider::capabilities() const
+{
+  return AddFeatures | DeleteFeatures | ChangeAttributeValues | AddAttributes | DeleteAttributes | ChangeGeometries;
 }
 
 void QgsGrassProvider::loadMapInfo()
@@ -309,11 +320,14 @@ QString QgsGrassProvider::storageType() const
 
 QgsFeatureIterator QgsGrassProvider::getFeatures( const QgsFeatureRequest& request )
 {
-  if ( isEdited() || isFrozen() || !mValid )
+  //if ( isEdited() || isFrozen() || !mValid )
+  if ( isFrozen() || !mValid )
     return QgsFeatureIterator();
 
   // check if outdated and update if necessary
   ensureUpdated();
+
+  QgsDebugMsg( QString("mEditing = %1").arg(mEditing) );
 
   return QgsFeatureIterator( new QgsGrassFeatureIterator( new QgsGrassFeatureSource( this ), true, request ) );
 }
@@ -349,7 +363,11 @@ long QgsGrassProvider::featureCount() const
 */
 const QgsFields & QgsGrassProvider::fields() const
 {
-  if ( !isTopoType() )
+  if ( mEditing ) 
+  {
+    return mEditFields; 
+  }
+  else if ( !isTopoType() )
   {
     return mLayers[mLayerId].fields;
   }
@@ -2105,6 +2123,74 @@ QString QgsGrassProvider::primitiveTypeName( int type )
 
   }
   return "unknown";
+}
+
+void QgsGrassProvider::startEditing( QgsVectorLayerEditBuffer* buffer )
+{
+  QgsDebugMsg( "Entered");
+  mEditing = true;
+  mEditBuffer = buffer;
+  connect( mEditBuffer, SIGNAL(geometryChanged( QgsFeatureId, QgsGeometry & )), this, SLOT( bufferGeometryChanged( QgsFeatureId, QgsGeometry & )) );
+}
+
+void QgsGrassProvider::bufferGeometryChanged( QgsFeatureId fid, QgsGeometry &geom )
+{
+  int currentFid = fid;
+  //if ( mEditFidHash.key( fid) > 0 )
+  if ( mEditFidHash.contains( fid) )
+  {
+    currentFid = mEditFidHash.value( fid);
+  }
+  QgsDebugMsg( QString("fid = %1 currentFid = %2").arg(fid).arg(currentFid) );
+
+  // store changed feature because QgsVectorLayerUndoCommandChangeGeometry::undo() may read it from layer
+  QgsFeature feature;
+  //getFeatures( QgsFeatureRequest().setFilterFid( currentFid ).setSubsetOfAttributes( QgsAttributeList() ) ).nextFeature( f );
+  bool fetched = getFeatures( QgsFeatureRequest().setFilterFid( currentFid ) ).nextFeature( feature );
+  
+  if ( fetched ) 
+  {
+    mChangedFeatures.insert( currentFid, feature );
+    QgsDebugMsg( QString("fetched = %1 feature.id = %2 valid = %3 stored in mChangedFeatures id = %4").arg(fetched).arg(feature.id()).arg(feature.isValid()).arg( mChangedFeatures.value(currentFid).id() ) );
+  }
+
+  struct line_pnts *points = Vect_new_line_struct();
+  struct line_cats *cats = Vect_new_cats_struct();
+
+  int type = Vect_read_line( mMap, points, cats, (int)currentFid );
+  QgsDebugMsg( QString("type = %1 n_points = %2").arg(type).arg(points->n_points) );
+
+
+  if ( type == GV_POINT || type == GV_CENTROID )
+  {
+    QgsPoint point = geom.asPoint();
+    points->x[0] = point.x();
+    points->y[0] = point.y();
+    QgsDebugMsg( QString("x = %1 y = %2").arg( point.x() ).arg( point.y() ) );
+  }
+  else if ( type == GV_LINE || type == GV_BOUNDARY )
+  {
+    QgsPolyline polyline = geom.asPolyline();
+    for ( int i = 0; i < points->n_points; i++ )
+    {
+      points->x[i] = polyline.value(i).x();
+      points->y[i] = polyline.value(i).y();
+    }
+  }
+  else
+  {
+    QgsDebugMsg( "unknown type");
+    return;
+  }
+  
+  // Vect_rewrite_line is doing delete/write and line id is lost and next reading by line id fails 
+  int newFid = Vect_rewrite_line( mMap, (int)currentFid, type, points, cats );
+  //Vect_write_line( mMap, type, points, cats );
+  // TODO: must also rewrite existing mappings
+
+  QgsDebugMsg( QString("newFid = %1 currentFid = %2").arg(newFid).arg(currentFid) );
+  //mEditFidHash.insert( newFid, fid );
+  mEditFidHash[fid] = newFid;
 }
 
 // -------------------------------------------------------------------------------

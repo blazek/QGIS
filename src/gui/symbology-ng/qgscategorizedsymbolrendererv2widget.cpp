@@ -20,6 +20,7 @@
 #include "qgssymbolv2.h"
 #include "qgssymbollayerv2utils.h"
 #include "qgsvectorcolorrampv2.h"
+#include "qgscolorrampcombobox.h"
 #include "qgsstylev2.h"
 
 #include "qgssymbolv2selectordialog.h"
