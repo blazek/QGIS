@@ -35,6 +35,7 @@ class QgsGrassFeatureSource : public QgsAbstractFeatureSource
     int     mLayerType;     // layer type POINT, LINE, ...
     int     mGrassType;     // grass feature type: GV_POINT, GV_LINE | GV_BOUNDARY, GV_AREA,
     int     mLayerId;       // ID used in layers
+    int     mLayerField;
     QGis::WkbType mQgisType;// WKBPoint, WKBLineString, ...
 
     int    mCidxFieldIndex;    // !UPDATE! Index for layerField in category index or -1 if no such field

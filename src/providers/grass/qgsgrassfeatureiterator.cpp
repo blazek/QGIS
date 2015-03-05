@@ -259,6 +259,9 @@ bool QgsGrassFeatureIterator::fetchFeature( QgsFeature& feature )
         //featureId = mSource->mEditFidHash.value( featureId );
         //QgsDebugMsg( QString( "id = %1 featureId = %2").arg(id).arg(featureId));
       }
+      Vect_reset_cats( mCats );
+      Vect_read_line( mSource->mMap, 0, mCats, id );
+      Vect_cat_get( mCats, mSource->mLayerField, &cat );
     }
     else if ( mSource->mLayerType == QgsGrassProvider::TOPO_POINT || mSource->mLayerType == QgsGrassProvider::TOPO_LINE )
     {
@@ -322,6 +325,12 @@ bool QgsGrassFeatureIterator::fetchFeature( QgsFeature& feature )
 
   if ( mSource->mEditing )
   {
+    //if ( mRequest.flags() & QgsFeatureRequest::SubsetOfAttributes )
+    //  setFeatureAttributes( cat, &feature, mRequest.subsetOfAttributes() );
+    //else
+    //  setFeatureAttributes( cat, &feature );
+    setFeatureAttributes( cat, &feature );
+
     int symbol = QgsGrassProvider::TopoUndefined;
     if ( type == GV_POINT )
     {
@@ -358,8 +367,10 @@ bool QgsGrassFeatureIterator::fetchFeature( QgsFeature& feature )
         symbol = QgsGrassProvider::TopoBoundary1;
       }
     }
-    feature.initAttributes( 1 );
-    feature.setAttribute( 0, QVariant( symbol ) );
+    //feature.initAttributes( 1 );
+    //feature.setAttribute( 0, QVariant( symbol ) );
+    //feature.initAttributes( mSource->mFields.size() );
+    feature.setAttribute( mSource->mFields.size()-1, QVariant( symbol ) );
   }
   else if ( ! QgsGrassProvider::isTopoType( mSource->mLayerType ) )
   {
@@ -658,7 +669,8 @@ void QgsGrassFeatureIterator::setFeatureAttributes( int cat, QgsFeature *feature
     GATT *att = ( GATT * ) bsearch( &key, glayer.attributes, glayer.nAttributes,
                                     sizeof( GATT ), QgsGrassProvider::cmpAtt );
 
-    feature->initAttributes( glayer.nColumns );
+    //feature->initAttributes( glayer.nColumns );
+    feature->initAttributes( mSource->mFields.size() );
 
     for ( int i = 0; i < glayer.nColumns; i++ )
     {
@@ -695,7 +707,8 @@ void QgsGrassFeatureIterator::setFeatureAttributes( int cat, QgsFeature *feature
     GATT *att = ( GATT * ) bsearch( &key, glayer.attributes, glayer.nAttributes,
                                     sizeof( GATT ), QgsGrassProvider::cmpAtt );
 
-    feature->initAttributes( glayer.nColumns );
+    //feature->initAttributes( glayer.nColumns );
+    feature->initAttributes( mSource->mFields.size() );
 
     for ( QgsAttributeList::const_iterator iter = attlist.begin(); iter != attlist.end(); ++iter )
     {
@@ -726,6 +739,7 @@ QgsGrassFeatureSource::QgsGrassFeatureSource( const QgsGrassProvider* p )
     , mLayerType( p->mLayerType )
     , mGrassType( p->mGrassType )
     , mLayerId( p->mLayerId )
+    , mLayerField( p->mLayerField )
     , mQgisType( p->mQgisType )
     , mCidxFieldIndex( p->mCidxFieldIndex )
     , mCidxFieldNumCats( p->mCidxFieldNumCats )

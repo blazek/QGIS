@@ -102,6 +102,7 @@ QgsGrassEditRenderer::~QgsGrassEditRenderer()
 QgsSymbolV2* QgsGrassEditRenderer::symbolForFeature( QgsFeature& feature )
 {
   //QgsDebugMsg( QString("fid = %1 topo_symbol = %2").arg(feature.id()).arg( feature.attribute(0).toInt() ) );
+  QgsDebugMsg( QString("fid = %1 topo_symbol = %2").arg(feature.id()).arg( feature.attribute( "topo_symbol" ).toInt() ) );
 
   //foreach( QgsRendererCategoryV2 category, mLineRenderer->categories() )
   //{
@@ -129,10 +130,12 @@ QgsSymbolV2* QgsGrassEditRenderer::symbolForFeature( QgsFeature& feature )
 void QgsGrassEditRenderer::startRender( QgsRenderContext& context, const QgsFields& fields )
 {
   // TODO better
-  QgsFields topoFields;
-  topoFields.append( QgsField( "topo_symbol", QVariant::Int, "int" ) );
-  mLineRenderer->startRender( context, topoFields );
-  mPointRenderer->startRender( context, topoFields );
+  //QgsFields topoFields;
+  //topoFields.append( QgsField( "topo_symbol", QVariant::Int, "int" ) );
+  //mLineRenderer->startRender( context, topoFields );
+  //mPointRenderer->startRender( context, topoFields );
+  mLineRenderer->startRender( context, fields );
+  mPointRenderer->startRender( context, fields );
 }
 
 void QgsGrassEditRenderer::stopRender( QgsRenderContext& context )

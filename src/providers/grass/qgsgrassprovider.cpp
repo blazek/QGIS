@@ -224,7 +224,11 @@ QgsGrassProvider::QgsGrassProvider( QString uri )
   loadMapInfo();
   setTopoFields();
 
-  mEditFields = QgsFields( mLayers[mLayerId].fields );
+  //mEditFields = QgsFields( mLayers[mLayerId].fields );
+  for ( int i = 0; i < mLayers[mLayerId].fields.size(); i++ ) 
+  {
+    mEditFields.append( mLayers[mLayerId].fields.at(i) );
+  }
   mEditFields.append( QgsField( "topo_symbol", QVariant::Int ) );
 
   mMapVersion = mMaps[mLayers[mLayerId].mapId].version;
