@@ -104,6 +104,11 @@ QString QgsGrassObject::elementName( Type type )
     return "";
 }
 
+bool QgsGrassObject::mapsetIdentical( const QgsGrassObject &other )
+{
+  return mGisdbase == other.mGisdbase && mLocation == other.mLocation && mMapset == other.mMapset;
+}
+
 #ifdef Q_OS_WIN
 #include <windows.h>
 QString GRASS_LIB_EXPORT QgsGrass::shortPath( const QString &path )
@@ -1244,6 +1249,36 @@ void GRASS_LIB_EXPORT QgsGrass::setRegion( struct Cell_head *window, QgsRectangl
   window->south = rect.yMinimum();
   window->east = rect.xMaximum();
   window->north = rect.yMaximum();
+}
+
+QString GRASS_LIB_EXPORT QgsGrass::setRegion( struct Cell_head *window, QgsRectangle rect, int rows, int cols )
+{
+  initRegion( window );
+  window->west = rect.xMinimum();
+  window->south = rect.yMinimum();
+  window->east = rect.xMaximum();
+  window->north = rect.yMaximum();
+  window->rows = rows;
+  window->cols = cols;
+
+  QString error;
+#if GRASS_VERSION_MAJOR < 7
+  char* err = G_adjust_Cell_head( window, 1, 1 );
+  if ( err )
+  {
+    error = QString( err );
+  }
+#else
+  try
+  {
+    G_adjust_Cell_head( window, 1, 1 );
+  }
+  catch ( QgsGrass::Exception &e )
+  {
+    error = e.what();
+  }
+#endif
+  return error;
 }
 
 bool GRASS_LIB_EXPORT QgsGrass::mapRegion( QgsGrassObject::Type type, QString gisdbase,

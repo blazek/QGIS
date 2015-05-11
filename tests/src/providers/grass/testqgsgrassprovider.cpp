@@ -15,17 +15,20 @@
 #include <cmath>
 
 #include <QApplication>
-#include <QObject>
+#include <QDir>
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QTemporaryFile>
 #include <QtTest/QtTest>
 
 #include <qgsapplication.h>
 #include <qgscoordinatereferencesystem.h>
 #include <qgsgrass.h>
+#include <qgsgrassimport.h>
 #include <qgsproviderregistry.h>
 #include <qgsrasterbandstats.h>
+#include <qgsrasterlayer.h>
 #include <qgsvectordataprovider.h>
 
 extern "C"
@@ -57,6 +60,7 @@ class TestQgsGrassProvider: public QObject
     void vectorLayers();
     void region();
     void info();
+    void rasterImport();
   private:
     void reportRow( QString message );
     void reportHeader( QString message );
@@ -78,11 +82,11 @@ class TestQgsGrassProvider: public QObject
 
 void TestQgsGrassProvider::reportRow( QString message )
 {
-  mReport += message + "<br>";
+  mReport += message + "<br>\n";
 }
 void TestQgsGrassProvider::reportHeader( QString message )
 {
-  mReport += "<h2>" + message + "</h2>";
+  mReport += "<h2>" + message + "</h2>\n";
 }
 
 //runs before all tests
@@ -91,15 +95,16 @@ void TestQgsGrassProvider::initTestCase()
   // init QGIS's paths - true means that all path will be inited from prefix
   QgsApplication::init();
   // QgsApplication::initQgis() calls QgsProviderRegistry::instance() which registers providers.
-  // Because providers are linked in build directory with rpath, it will also try to load GRASS providers
-  // in version different form which we are testing here so it loads also GRASS libs in different version
-  // and it results in segfault when __do_global_dtors_aux() is called.
-  // => we must not call QgsApplication::initQgis()
-  //QgsApplication::initQgis();
+  // Because providers are linked in build directory with rpath, it would also try to load GRASS providers
+  // in version different form which we are testing here and it would also load GRASS libs in different version
+  // and result in segfault when __do_global_dtors_aux() is called.
+  // => we must set QGIS_PROVIDER_FILE before QgsApplication::initQgis() to avoid loading GRASS provider in different version
+  setenv( "QGIS_PROVIDER_FILE", "gdal|ogr", 1 );
+  QgsApplication::initQgis();
   QString mySettings = QgsApplication::showSettings();
-  mySettings = mySettings.replace( "\n", "<br />" );
+  mySettings = mySettings.replace( "\n", "<br />\n" );
   mReport += QString( "<h1>GRASS %1 provider tests</h1>\n" ).arg( GRASS_BUILD_VERSION );
-  mReport += "<p>" + mySettings + "</p>";
+  mReport += "<p>" + mySettings + "</p>\n";
 
   QgsGrass::init();
 
@@ -398,6 +403,66 @@ void TestQgsGrassProvider::info()
   {
     ok = false;
   }
+
+  verify( ok );
+}
+
+void TestQgsGrassProvider::rasterImport()
+{
+  reportHeader( "TestQgsGrassProvider::rasterImport" );
+  bool ok = true;
+
+  QString uri = QString( TEST_DATA_DIR ) + "/tenbytenraster.asc";
+  reportRow( "input raster: " + uri );
+
+  //QgsRasterLayer* layer = new QgsRasterLayer( uri, "test", "gdal" );
+  //if ( !layer->isValid()){
+  //  reportRow( "input raster " + uri + " is not valid, cannot run test" );
+  //  verify( false );
+  //  return;;
+  //}
+
+  // create temporary output location
+  // use QTemporaryFile to generate name (QTemporaryDir since 5.0)
+  QTemporaryFile* tmpFile = new QTemporaryFile( "qgis-grass-test" );
+  tmpFile->open();
+  QString tmpGisdbaseName = tmpFile->fileName();
+  delete tmpFile;
+  QString tmpGisdbase = QDir::tempPath() + "/" + tmpGisdbaseName;
+  QString tmpLocation = "test";
+  QString tmpMapset = "PERMANENT";
+
+  QString tmpMapsetPath = tmpGisdbase + "/" + tmpLocation + "/" + tmpMapset;
+  reportRow( "tmpMapsetPath: " + tmpMapsetPath );
+  QDir tmpDir = QDir::temp();
+  if ( !tmpDir.mkpath( tmpMapsetPath ) )
+  {
+    reportRow( "cannot create " + tmpMapsetPath );
+    verify( false );
+    return;
+  }
+
+  QStringList cpFiles;
+  cpFiles << "DEFAULT_WIND" << "WIND" << "PROJ_INFO" << "PROJ_UNITS";
+  QString templateMapsetPath = mGisdbase + "/" + mLocation + "/PERMANENT";
+  foreach ( QString cpFile, cpFiles )
+  {
+    if ( !QFile::copy( templateMapsetPath + "/" + cpFile, tmpMapsetPath + "/" + cpFile ) )
+    {
+      reportRow( "cannot copy " + cpFile );
+      verify( false );
+      return;
+    }
+  }
+
+  QgsGrassObject rasterObject( tmpGisdbase, tmpLocation, tmpMapset, "test", QgsGrassObject::Raster );
+  QgsGrassRasterImport *import = new QgsGrassRasterImport( rasterObject, "gdal", uri );
+  if ( !import->import() )
+  {
+    reportRow( "import failed: " +  import->error() );
+    ok = false;
+  }
+  delete import;
 
   verify( ok );
 }

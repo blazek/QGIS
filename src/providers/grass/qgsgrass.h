@@ -29,6 +29,7 @@ extern "C"
 }
 
 #include <stdexcept>
+#include "qgsapplication.h"
 #include "qgsexception.h"
 #include <qgsrectangle.h>
 #include <QProcess>
@@ -88,6 +89,8 @@ class GRASS_LIB_EXPORT QgsGrassObject
     // descriptive full name
     QString elementName() const;
     static QString elementName( Type type );
+    // returns true if gisdbase, location and mapset are the same
+    bool mapsetIdentical( const QgsGrassObject &other );
   private:
     QString mGisdbase;
     QString mLocation;
@@ -217,6 +220,9 @@ class QgsGrass
     static GRASS_LIB_EXPORT void initRegion( struct Cell_head *window );
     //! Set region extent
     static GRASS_LIB_EXPORT void setRegion( struct Cell_head *window, QgsRectangle rect );
+    /** Init region, set extent, rows and cols and adjust.
+     * Returns error if adjustment failed. */
+    static GRASS_LIB_EXPORT QString setRegion( struct Cell_head *window, QgsRectangle rect, int rows, int cols );
 
     // ! Get map region
     static GRASS_LIB_EXPORT bool mapRegion( QgsGrassObject::Type type, QString gisdbase,
@@ -345,6 +351,9 @@ class QgsGrass
 #if defined(WIN32)
     static GRASS_LIB_EXPORT QString shortPath( const QString &path );
 #endif
+
+    // path to QGIS GRASS modules like qgis.g.info etc.
+    static QString qgisGrassModulePath() { return QgsApplication::libexecPath() + "grass/modules"; }
 
   private:
     static int initialized; // Set to 1 after initialization

@@ -14,14 +14,20 @@
  *                                                                         *
  ***************************************************************************/
 
+#include "qgsmessageoutput.h"
+#include "qgsmimedatautils.h"
+#include "qgsrasterlayer.h"
+#include "qgslogger.h"
+
 #include "qgsgrassprovidermodule.h"
 #include "qgsgrassprovider.h"
 #include "qgsgrass.h"
-#include "qgslogger.h"
 
 #include <QAction>
 #include <QFileInfo>
 #include <QDir>
+
+//----------------------- QgsGrassLocationItem ------------------------------
 
 QgsGrassLocationItem::QgsGrassLocationItem( QgsDataItem* parent, QString dirPath, QString path )
     : QgsDirectoryItem( parent, "", dirPath, path )
@@ -61,6 +67,10 @@ QVector<QgsDataItem*>QgsGrassLocationItem::createChildren()
   }
   return mapsets;
 }
+
+//----------------------- QgsGrassMapsetItem ------------------------------
+
+QList<QgsGrassImport*> QgsGrassMapsetItem::mImports;
 
 QgsGrassMapsetItem::QgsGrassMapsetItem( QgsDataItem* parent, QString dirPath, QString path )
     : QgsDirectoryItem( parent, "", dirPath, path )
@@ -153,8 +163,72 @@ QVector<QgsDataItem*> QgsGrassMapsetItem::createChildren()
     items.append( layer );
   }
 
+  QgsGrassObject mapsetObject( mGisdbase, mLocation, mName );
+  foreach ( QgsGrassImport* import, mImports )
+  {
+    if ( !import )
+    {
+      continue;
+    }
+    if ( !import->grassObject().mapsetIdentical( mapsetObject ) )
+    {
+      continue;
+    }
+    QString path = mPath + "/" + import->grassObject().elementName() + "/" + import->grassObject().name();
+    items.append( new QgsGrassImportItem( this, import, path ) );
+  }
+
   return items;
 }
+
+bool QgsGrassMapsetItem::handleDrop( const QMimeData * data, Qt::DropAction )
+{
+  if ( !QgsMimeDataUtils::isUriList( data ) )
+    return false;
+
+  //QgsDataSourceURI uri = QgsPostgresConn::connUri( mName );
+
+  QStringList errors;
+  QgsMimeDataUtils::UriList lst = QgsMimeDataUtils::decodeUriList( data );
+  foreach ( const QgsMimeDataUtils::Uri& u, lst )
+  {
+    if ( u.layerType == "raster" )
+    {
+      //QgsRasterLayer* layer = new QgsRasterLayer( u.uri, u.name, u.providerKey );
+      //if ( layer->isValid() )
+      //{
+      QString path = mPath + "/" + "raster" + "/" + u.name;
+      //QString uri = mDirPath + "/" + "cellhd" + "/" + u.name;
+      QgsGrassObject rasterObject( mGisdbase, mLocation, mName, u.name, QgsGrassObject::Raster );
+      QgsGrassRasterImport *import = new QgsGrassRasterImport( rasterObject, u.providerKey, u.uri );
+      import->start();
+      mImports.append( import );
+      //}
+      //else
+      //{
+      //  delete layer;
+      //  errors.append( tr( "%1 is not a valid layer" ).arg( u.name ) );
+      //}
+    }
+    else
+    {
+      errors.append( tr( "%1 layer type not supported" ).arg( u.name ) );
+    }
+  }
+
+  if ( !errors.isEmpty() )
+  {
+    QgsMessageOutput *output = QgsMessageOutput::createMessageOutput();
+    output->setTitle( tr( "Import to GRASS mapset" ) );
+    output->setMessage( tr( "Failed to import some layers!\n\n" ) + errors.join( "\n" ), QgsMessageOutput::MessageText );
+    output->showMessage();
+  }
+
+  refresh();
+  return true;
+}
+
+//----------------------- QgsGrassObjectItemBase ------------------------------
 
 QgsGrassObjectItemBase::QgsGrassObjectItemBase( QgsGrassObject grassObject ) :
     mGrassObject( grassObject )
@@ -207,6 +281,8 @@ void QgsGrassObjectItem::deleteGrassObject()
   QgsGrassObjectItemBase::deleteGrassObject( parent() );
 }
 
+//----------------------- QgsGrassVectorItem ------------------------------
+
 QgsGrassVectorItem::QgsGrassVectorItem( QgsDataItem* parent, QgsGrassObject grassObject, QString path ) :
     QgsDataCollectionItem( parent, grassObject.name(), path )
     , QgsGrassObjectItemBase( grassObject )
@@ -231,6 +307,8 @@ void QgsGrassVectorItem::deleteGrassObject()
   QgsGrassObjectItemBase::deleteGrassObject( parent() );
 }
 
+//----------------------- QgsGrassVectorLayerItem ------------------------------
+
 QgsGrassVectorLayerItem::QgsGrassVectorLayerItem( QgsDataItem* parent, QgsGrassObject grassObject, QString layerName,
     QString path, QString uri,
     LayerType layerType, bool singleLayer )
@@ -245,11 +323,26 @@ QString QgsGrassVectorLayerItem::layerName() const
   return mGrassObject.name() + " " + name();
 }
 
+//----------------------- QgsGrassRasterItem ------------------------------
+
 QgsGrassRasterItem::QgsGrassRasterItem( QgsDataItem* parent, QgsGrassObject grassObject,
                                         QString path, QString uri )
     : QgsGrassObjectItem( parent, grassObject, grassObject.name(), path, uri, QgsLayerItem::Raster, "grassraster" )
 {
 }
+
+//----------------------- QgsGrassImportItem ------------------------------
+
+QgsGrassImportItem::QgsGrassImportItem( QgsDataItem* parent, QgsGrassImport* import,
+                                        QString path )
+    : QgsDataItem( QgsDataItem::Layer, parent, import->grassObject().name(), path )
+    , QgsGrassObjectItemBase( import->grassObject() )
+{
+  setCapabilities( QgsDataItem::NoCapabilities ); // disable fertility
+  setState( Populating );
+}
+
+//-------------------------------------------------------------------------
 
 QGISEXTERN int dataCapabilities()
 {
