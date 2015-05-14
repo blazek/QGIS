@@ -14,10 +14,12 @@
  *                                                                         *
  ***************************************************************************/
 
+#include <QByteArray>
 #include <QtConcurrentRun>
 
 #include "qgsproviderregistry.h"
 #include "qgsrasterdataprovider.h"
+#include "qgsrasteriterator.h"
 
 #include "qgsgrassimport.h"
 
@@ -97,11 +99,19 @@ bool QgsGrassRasterImport::import()
     return false;
   }
 
+  // TODO: size / extent dialog
+  if ( !(provider->capabilities() & QgsRasterInterface::Size) || provider->xSize() == 0 || provider->ySize() == 0 ) {
+    setError( "unknown data source size" );
+    delete provider;
+    return false;
+  }
+
   QgsDebugMsg( "extent = " + provider->extent().toString() );
 
   for ( int band = 1; band <= provider->bandCount(); band++ )
   {
     QgsDebugMsg( QString("band = %1").arg(band));
+    QGis::DataType qgis_out_type = QGis::UnknownDataType;
     RASTER_MAP_TYPE data_type = -1;
     switch ( provider->dataType(band) )
     {
@@ -110,17 +120,17 @@ bool QgsGrassRasterImport::import()
       case QGis::Int16:
       case QGis::UInt32:
       case QGis::Int32:
-        data_type = CELL_TYPE;
+        qgis_out_type = QGis::Int32;
         break;
       case QGis::Float32:
-        data_type = FCELL_TYPE;
+        qgis_out_type = QGis::Float32;
         break;
       case QGis::Float64:
-        data_type = DCELL_TYPE;
+        qgis_out_type = QGis::Float64;
         break;
       case QGis::ARGB32:
       case QGis::ARGB32_Premultiplied:
-        data_type = CELL_TYPE; // split to multiple bands?
+        qgis_out_type = QGis::Int32;  // split to multiple bands?
         break;
       case QGis::CInt16:
       case QGis::CInt32:
@@ -131,6 +141,7 @@ bool QgsGrassRasterImport::import()
         delete provider;
         return false;
     }
+    //qgis_out_type = QGis::Int32; // debug
 
     QgsDebugMsg( QString("data_type = %1").arg(data_type));
 
@@ -158,22 +169,73 @@ bool QgsGrassRasterImport::import()
     QDataStream outStream(process);
 
     outStream << provider->extent() << (qint32)provider->xSize() << (qint32)provider->ySize();
-    outStream << (qint32)data_type;
+    outStream << (qint32)qgis_out_type;
+
+    // calculate reasonable block size (5MB)
+    int maximumTileHeight = 5000000/provider->xSize();
+    maximumTileHeight = std::max(1,maximumTileHeight);
+
+    QgsRasterIterator iter( provider );
+    iter.setMaximumTileWidth( provider->xSize() );
+    iter.setMaximumTileHeight( maximumTileHeight );
+
+    iter.startRasterRead( band, provider->xSize(), provider->ySize(), provider->extent() );
+
+    int iterLeft = 0;
+    int iterTop = 0;
+    int iterCols = 0;
+    int iterRows = 0;
+    QgsRasterBlock* block = 0;
+    while ( iter.readNextRasterPart( band, iterCols, iterRows, &block, iterLeft, iterTop ) )
+    {
+      for ( int row = 0; row < iterRows; row++ )
+      {
+        if ( !block->convert(qgis_out_type) ) {
+          setError( "cannot vonvert data type" );
+          delete block;
+          delete provider;
+          return false;
+        }
+        char * data = block->bits( row, 0 );
+        int size = iterCols * block->dataTypeSize();
+        QByteArray byteArray = QByteArray::fromRawData(data, size); // does not copy data and does not take ownership
+        outStream << byteArray;
+      }
+      delete block;
+    }
+
+    process->closeWriteChannel();
+    process->waitForFinished(5000);
 
     //process->waitForReadyRead();
     //QString str = process->readLine().trimmed();
     //QgsDebugMsg( "read from stdout : " + str );
 
-    process->closeWriteChannel();
-    process->waitForFinished(5000);
+    QString stdoutString = process->readAllStandardOutput().data();
+    QString stderrString = process->readAllStandardError().data();
 
-    if ( process->exitCode() != 0 )
+    QString processResult = QString( "exitStatus=%1, exitCode=%2, errorCode=%3, error=%4 stdout=%5, stderr=%6" )
+                            .arg( process->exitStatus() ).arg( process->exitCode() )
+                            .arg( process->error() ).arg( process->errorString() )
+                            .arg( stdoutString ).arg( stderrString );
+    QgsDebugMsg( "processResult: " + processResult );
+
+    if ( process->exitStatus() != QProcess::NormalExit )
     {
-      setError( process->readAllStandardError().data() );
+      setError( process->errorString() );
       delete provider;
       delete process;
       return false;
     }
+
+    if ( process->exitCode() != 0 )
+    {
+      setError( stderrString );
+      delete provider;
+      delete process;
+      return false;
+    }
+
     delete process;
   }
   delete provider;

@@ -412,23 +412,13 @@ void TestQgsGrassProvider::rasterImport()
   reportHeader( "TestQgsGrassProvider::rasterImport" );
   bool ok = true;
 
-  QString uri = QString( TEST_DATA_DIR ) + "/tenbytenraster.asc";
-  reportRow( "input raster: " + uri );
-
-  //QgsRasterLayer* layer = new QgsRasterLayer( uri, "test", "gdal" );
-  //if ( !layer->isValid()){
-  //  reportRow( "input raster " + uri + " is not valid, cannot run test" );
-  //  verify( false );
-  //  return;;
-  //}
-
   // create temporary output location
   // use QTemporaryFile to generate name (QTemporaryDir since 5.0)
-  QTemporaryFile* tmpFile = new QTemporaryFile( "qgis-grass-test" );
+  QTemporaryFile* tmpFile = new QTemporaryFile( QDir::tempPath() + "/qgis-grass-test" );
   tmpFile->open();
-  QString tmpGisdbaseName = tmpFile->fileName();
+  QString tmpGisdbase = tmpFile->fileName();
   delete tmpFile;
-  QString tmpGisdbase = QDir::tempPath() + "/" + tmpGisdbaseName;
+  reportRow( "tmpGisdbase: " + tmpGisdbase );
   QString tmpLocation = "test";
   QString tmpMapset = "PERMANENT";
 
@@ -455,14 +445,24 @@ void TestQgsGrassProvider::rasterImport()
     }
   }
 
-  QgsGrassObject rasterObject( tmpGisdbase, tmpLocation, tmpMapset, "test", QgsGrassObject::Raster );
-  QgsGrassRasterImport *import = new QgsGrassRasterImport( rasterObject, "gdal", uri );
-  if ( !import->import() )
+  QStringList rasterFiles;
+  rasterFiles << "tenbytenraster.asc" << "raster/band1_byte_ct_epsg4326.tif" << "raster/band1_int16_noct_epsg4326.tif";
+  rasterFiles << "raster/band1_float32_noct_epsg4326.tif" << "raster/band3_int16_noct_epsg4326.tif";
+
+  foreach ( QString rasterFile, rasterFiles)
   {
-    reportRow( "import failed: " +  import->error() );
-    ok = false;
+    QString uri = QString( TEST_DATA_DIR ) + "/" + rasterFile;
+    QString name = QFileInfo(uri).baseName();
+    reportRow( "input raster: " + uri );
+    QgsGrassObject rasterObject( tmpGisdbase, tmpLocation, tmpMapset, name, QgsGrassObject::Raster );
+    QgsGrassRasterImport *import = new QgsGrassRasterImport( rasterObject, "gdal", uri );
+    if ( !import->import() )
+    {
+      reportRow( "import failed: " +  import->error() );
+      ok = false;
+    }
+    delete import;
   }
-  delete import;
 
   verify( ok );
 }
