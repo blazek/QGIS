@@ -194,21 +194,12 @@ bool QgsGrassMapsetItem::handleDrop( const QMimeData * data, Qt::DropAction )
   {
     if ( u.layerType == "raster" )
     {
-      //QgsRasterLayer* layer = new QgsRasterLayer( u.uri, u.name, u.providerKey );
-      //if ( layer->isValid() )
-      //{
       QString path = mPath + "/" + "raster" + "/" + u.name;
-      //QString uri = mDirPath + "/" + "cellhd" + "/" + u.name;
       QgsGrassObject rasterObject( mGisdbase, mLocation, mName, u.name, QgsGrassObject::Raster );
       QgsGrassRasterImport *import = new QgsGrassRasterImport( rasterObject, u.providerKey, u.uri );
+      connect( import, SIGNAL( finished(QgsGrassImport*) ), SLOT( onImportFinished(QgsGrassImport*) ) );
       import->start();
       mImports.append( import );
-      //}
-      //else
-      //{
-      //  delete layer;
-      //  errors.append( tr( "%1 is not a valid layer" ).arg( u.name ) );
-      //}
     }
     else
     {
@@ -226,6 +217,23 @@ bool QgsGrassMapsetItem::handleDrop( const QMimeData * data, Qt::DropAction )
 
   refresh();
   return true;
+}
+
+void QgsGrassMapsetItem::onImportFinished(QgsGrassImport* import)
+{
+  QgsDebugMsg( "entered" );
+  if ( !import->error().isEmpty() )
+  {
+    QgsMessageOutput *output = QgsMessageOutput::createMessageOutput();
+    output->setTitle( tr( "Import to GRASS mapset failed" ) );
+    output->setMessage( tr( "Failed to import %1 to %2: %3" ).arg(import->uri()).arg(import->grassObject()
+                        .mapsetPath()).arg(import->error()), QgsMessageOutput::MessageText );
+    output->showMessage();
+  }
+
+  mImports.removeOne(import);
+  import->deleteLater();
+  refresh();
 }
 
 //----------------------- QgsGrassObjectItemBase ------------------------------

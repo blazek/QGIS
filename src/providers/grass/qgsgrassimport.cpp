@@ -30,19 +30,29 @@ extern "C"
 #include <grass/raster.h>
 }
 
-QgsGrassImport::QgsGrassImport(QgsGrassObject grassObject)
+QgsGrassImport::QgsGrassImport(QgsGrassObject grassObject, const QString & providerKey, const QString & uri)
   : QObject()
   , mGrassObject(grassObject)
+  , mProviderKey(providerKey)
+  , mUri(uri)
 {
+}
+
+void QgsGrassImport::setError(QString error)
+{
+  QgsDebugMsg( "error: " + error );
+  mError = error;
+}
+
+QString QgsGrassImport::error()
+{
+  return mError;
 }
 
 //------------------------------ QgsGrassRasterImport ------------------------------------
 //QgsGrassRasterImport::QgsGrassRasterImport(QgsGrassObject grassObject, QgsRasterLayer* layer)
 QgsGrassRasterImport::QgsGrassRasterImport(const QgsGrassObject& grassObject, const QString & providerKey, const QString & uri )
-  : QgsGrassImport(grassObject)
-  //, mProvider(0)
-  , mProviderKey(providerKey)
-  , mUri(uri)
+  : QgsGrassImport(grassObject, providerKey, uri)
   , mFutureWatcher(0)
 {
 }
@@ -57,22 +67,11 @@ QgsGrassRasterImport::~QgsGrassRasterImport()
   }
 }
 
-void QgsGrassRasterImport::setError(QString error)
-{
-  QgsDebugMsg( "error: " + error );
-  mError = error;
-}
-
-QString QgsGrassRasterImport::error()
-{
-  return mError;
-}
-
 void QgsGrassRasterImport::start()
 {
   QgsDebugMsg( "entered" );
   mFutureWatcher = new QFutureWatcher<bool>( this );
-  connect( mFutureWatcher, SIGNAL( finished() ), SLOT( finished() ) );
+  connect( mFutureWatcher, SIGNAL( finished() ), SLOT( onFinished() ) );
   mFutureWatcher->setFuture( QtConcurrent::run( run, this ) );
 }
 
@@ -242,7 +241,8 @@ bool QgsGrassRasterImport::import()
   return true;
 }
 
-void QgsGrassRasterImport::finished()
+void QgsGrassRasterImport::onFinished()
 {
   QgsDebugMsg( "entered" );
+  emit finished(this);
 }

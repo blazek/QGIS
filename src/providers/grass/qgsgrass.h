@@ -79,6 +79,7 @@ class GRASS_LIB_EXPORT QgsGrassObject
     void setLocation( const QString& location ) { mLocation = location; }
     QString mapset() const { return mMapset; }
     void setMapset( const QString& mapset ) { mMapset = mapset; }
+    QString mapsetPath() const { return mGisdbase + "/" + mLocation + "/" + mMapset; }
     QString name() const { return mName; }
     void setName( const QString& name ) { mName = name; }
     QString fullName() const { return mName + "@" + mMapset; }

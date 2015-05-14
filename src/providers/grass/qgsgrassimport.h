@@ -28,11 +28,23 @@ class QgsGrassImport : public QObject
 {
     Q_OBJECT
   public:
-    QgsGrassImport(QgsGrassObject grassObject);
+    QgsGrassImport(QgsGrassObject grassObject, const QString & providerKey, const QString & uri );
     virtual ~QgsGrassImport() {}
-    QgsGrassObject grassObject() { return mGrassObject; }
+    QgsGrassObject grassObject() const { return mGrassObject; }
+    QString uri() const { return mUri; }
+    // get error if import failed
+    QString error();
+
+  signals:
+    // sent when process finished
+    void finished(QgsGrassImport *import);
+
   protected:
+    void setError(QString error);
     QgsGrassObject mGrassObject;
+    QString mProviderKey;
+    QString mUri;
+    QString mError;
 };
 
 class QgsGrassRasterImport : public QgsGrassImport
@@ -46,19 +58,17 @@ class QgsGrassRasterImport : public QgsGrassImport
     bool import();
     // start import in thread
     void start();
-    // get error if import failed
-    QString error();
   public slots:
-    void finished();
+    void onFinished();
+  //signals:
+    //void finished(QgsGrassImport *import) override;
   private:
     static bool run(QgsGrassRasterImport *imp);
-    void setError(QString error);
+
     //QgsRasterLayer* mLayer;
-    QString mProviderKey;
-    QString mUri;
     //QgsRasterDataProvider* mProvider;
     QFutureWatcher<bool>* mFutureWatcher;
-    QString mError;
+
 };
 
 #endif // QGSGRASSIMPORT_H
