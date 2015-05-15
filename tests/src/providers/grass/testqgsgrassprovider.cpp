@@ -449,13 +449,26 @@ void TestQgsGrassProvider::rasterImport()
   rasterFiles << "tenbytenraster.asc" << "raster/band1_byte_ct_epsg4326.tif" << "raster/band1_int16_noct_epsg4326.tif";
   rasterFiles << "raster/band1_float32_noct_epsg4326.tif" << "raster/band3_int16_noct_epsg4326.tif";
 
-  foreach ( QString rasterFile, rasterFiles)
+  foreach ( QString rasterFile, rasterFiles )
   {
     QString uri = QString( TEST_DATA_DIR ) + "/" + rasterFile;
-    QString name = QFileInfo(uri).baseName();
+    QString name = QFileInfo( uri ).baseName();
     reportRow( "input raster: " + uri );
+    QgsRasterDataProvider* provider = qobject_cast<QgsRasterDataProvider*>( QgsProviderRegistry::instance()->provider( "gdal", uri ) );
+    if ( !provider )
+    {
+      reportRow( "Cannot create provider " + uri );
+      ok = false;
+      continue;
+    }
+    if ( !provider->isValid() )
+    {
+      reportRow( "Provider is not valid " + uri );
+      ok = false;
+      continue;
+    }
     QgsGrassObject rasterObject( tmpGisdbase, tmpLocation, tmpMapset, name, QgsGrassObject::Raster );
-    QgsGrassRasterImport *import = new QgsGrassRasterImport( rasterObject, "gdal", uri );
+    QgsGrassRasterImport *import = new QgsGrassRasterImport( provider, rasterObject );
     if ( !import->import() )
     {
       reportRow( "import failed: " +  import->error() );

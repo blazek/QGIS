@@ -16,6 +16,8 @@
 
 #include "qgsmessageoutput.h"
 #include "qgsmimedatautils.h"
+#include "qgsnewnamedialog.h"
+#include "qgsproviderregistry.h"
 #include "qgsrasterlayer.h"
 #include "qgslogger.h"
 
@@ -26,6 +28,7 @@
 #include <QAction>
 #include <QFileInfo>
 #include <QDir>
+#include <QLabel>
 
 //----------------------- QgsGrassLocationItem ------------------------------
 
@@ -174,8 +177,11 @@ QVector<QgsDataItem*> QgsGrassMapsetItem::createChildren()
     {
       continue;
     }
-    QString path = mPath + "/" + import->grassObject().elementName() + "/" + import->grassObject().name();
-    items.append( new QgsGrassImportItem( this, import, path ) );
+    foreach ( QString name, import->names() )
+    {
+      QString path = mPath + "/" + import->grassObject().elementName() + "/" + name;
+      items.append( new QgsGrassImportItem( this, name, path, import ) );
+    }
   }
 
   return items;
@@ -186,7 +192,8 @@ bool QgsGrassMapsetItem::handleDrop( const QMimeData * data, Qt::DropAction )
   if ( !QgsMimeDataUtils::isUriList( data ) )
     return false;
 
-  //QgsDataSourceURI uri = QgsPostgresConn::connUri( mName );
+  QgsGrassObject mapsetObject( mGisdbase, mLocation, mName );
+  QStringList existingRasters = QgsGrass::rasters( mapsetObject.mapsetPath() );
 
   QStringList errors;
   QgsMimeDataUtils::UriList lst = QgsMimeDataUtils::decodeUriList( data );
@@ -194,11 +201,65 @@ bool QgsGrassMapsetItem::handleDrop( const QMimeData * data, Qt::DropAction )
   {
     if ( u.layerType == "raster" )
     {
+      QgsRasterDataProvider* provider = qobject_cast<QgsRasterDataProvider*>( QgsProviderRegistry::instance()->provider( u.providerKey, u.uri ) );
+      if ( !provider )
+      {
+        errors.append( tr( "Cannot create provider %1 : %2" ).arg( u.providerKey ).arg( u.uri ) );
+        continue;
+      }
+      if ( !provider->isValid() )
+      {
+        errors.append( tr( "Provider is not valid  %1 : %2" ).arg( u.providerKey ).arg( u.uri ) );
+        delete provider;
+        continue;
+      }
+#ifdef WIN32
+      Qt::CaseSensitivity cs = Qt::CaseInsensitive;
+#else
+      Qt::CaseSensitivity cs = Qt::CaseSensitive;
+#endif
+      QStringList extensions = QgsGrassRasterImport::extensions( provider );
+      QString newName = u.name;
+      if ( QgsNewNameDialog::exists( u.name, extensions, existingRasters, cs ) )
+      {
+        QgsDebugMsg( "name or derived names exist" );
+        QgsNewNameDialog dialog( u.name, u.name, extensions, existingRasters, QRegExp(), cs );
+        if ( dialog.exec() != QDialog::Accepted )
+        {
+          delete provider;
+          continue;
+        }
+        newName = dialog.name();
+      }
+
       QString path = mPath + "/" + "raster" + "/" + u.name;
-      QgsGrassObject rasterObject( mGisdbase, mLocation, mName, u.name, QgsGrassObject::Raster );
-      QgsGrassRasterImport *import = new QgsGrassRasterImport( rasterObject, u.providerKey, u.uri );
-      connect( import, SIGNAL( finished(QgsGrassImport*) ), SLOT( onImportFinished(QgsGrassImport*) ) );
-      import->start();
+      QgsGrassObject rasterObject( mGisdbase, mLocation, mName, newName, QgsGrassObject::Raster );
+      QgsGrassRasterImport *import = new QgsGrassRasterImport( provider, rasterObject ); // takes provider ownership
+      connect( import, SIGNAL( finished( QgsGrassImport* ) ), SLOT( onImportFinished( QgsGrassImport* ) ) );
+
+      // delete existing files (confirmed before in dialog)
+      bool deleteOk = true;
+      foreach ( QString name, import->names() )
+      {
+        QgsGrassObject obj( rasterObject );
+        obj.setName( name );
+        if ( QgsGrass::objectExists( obj ) )
+        {
+          QgsDebugMsg( name + " exists -> delete" );
+          if ( !QgsGrass::deleteObject( obj ) )
+          {
+            errors.append( tr( "Cannot delete %1" ).arg( name ) );
+            deleteOk = false;
+          }
+        }
+      }
+      if ( !deleteOk )
+      {
+        delete import;
+        continue;
+      }
+
+      import->importInThread();
       mImports.append( import );
     }
     else
@@ -219,19 +280,19 @@ bool QgsGrassMapsetItem::handleDrop( const QMimeData * data, Qt::DropAction )
   return true;
 }
 
-void QgsGrassMapsetItem::onImportFinished(QgsGrassImport* import)
+void QgsGrassMapsetItem::onImportFinished( QgsGrassImport* import )
 {
   QgsDebugMsg( "entered" );
   if ( !import->error().isEmpty() )
   {
     QgsMessageOutput *output = QgsMessageOutput::createMessageOutput();
     output->setTitle( tr( "Import to GRASS mapset failed" ) );
-    output->setMessage( tr( "Failed to import %1 to %2: %3" ).arg(import->uri()).arg(import->grassObject()
-                        .mapsetPath()).arg(import->error()), QgsMessageOutput::MessageText );
+    output->setMessage( tr( "Failed to import %1 to %2: %3" ).arg( import->uri() ).arg( import->grassObject()
+                        .mapsetPath() ).arg( import->error() ), QgsMessageOutput::MessageText );
     output->showMessage();
   }
 
-  mImports.removeOne(import);
+  mImports.removeOne( import );
   import->deleteLater();
   refresh();
 }
@@ -341,9 +402,8 @@ QgsGrassRasterItem::QgsGrassRasterItem( QgsDataItem* parent, QgsGrassObject gras
 
 //----------------------- QgsGrassImportItem ------------------------------
 
-QgsGrassImportItem::QgsGrassImportItem( QgsDataItem* parent, QgsGrassImport* import,
-                                        QString path )
-    : QgsDataItem( QgsDataItem::Layer, parent, import->grassObject().name(), path )
+QgsGrassImportItem::QgsGrassImportItem( QgsDataItem* parent, const QString& name, const QString& path, QgsGrassImport* import )
+    : QgsDataItem( QgsDataItem::Layer, parent, name, path )
     , QgsGrassObjectItemBase( import->grassObject() )
 {
   setCapabilities( QgsDataItem::NoCapabilities ); // disable fertility

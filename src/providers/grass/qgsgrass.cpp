@@ -1101,6 +1101,21 @@ QStringList GRASS_LIB_EXPORT QgsGrass::elements( const QString&  mapsetPath, con
   return list;
 }
 
+bool GRASS_LIB_EXPORT QgsGrass::objectExists( const QgsGrassObject& grassObject )
+{
+  QString path = grassObject.mapsetPath();
+  if ( grassObject.type() == QgsGrassObject::Raster )
+    path += "/cellhd";
+  else if ( grassObject.type() == QgsGrassObject::Vector )
+    path += "/vect";
+  else if ( grassObject.type() == QgsGrassObject::Region )
+    path += "/windows";
+
+  path += "/" + grassObject.name();
+  QFileInfo fi( path );
+  return fi.exists();
+}
+
 QString GRASS_LIB_EXPORT QgsGrass::regionString( const struct Cell_head *window )
 {
   QString reg;

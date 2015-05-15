@@ -20,7 +20,7 @@
 #include <QObject>
 
 #include "qgslogger.h"
-//#include "qgsrasterlayer.h"
+#include "qgsrasterdataprovider.h"
 
 #include "qgsgrass.h"
 
@@ -28,22 +28,21 @@ class QgsGrassImport : public QObject
 {
     Q_OBJECT
   public:
-    QgsGrassImport(QgsGrassObject grassObject, const QString & providerKey, const QString & uri );
+    QgsGrassImport( QgsGrassObject grassObject );
     virtual ~QgsGrassImport() {}
     QgsGrassObject grassObject() const { return mGrassObject; }
-    QString uri() const { return mUri; }
+    virtual QString uri() const = 0;
     // get error if import failed
     QString error();
+    virtual QStringList names() const = 0;
 
   signals:
     // sent when process finished
-    void finished(QgsGrassImport *import);
+    void finished( QgsGrassImport *import );
 
   protected:
-    void setError(QString error);
+    void setError( QString error );
     QgsGrassObject mGrassObject;
-    QString mProviderKey;
-    QString mUri;
     QString mError;
 };
 
@@ -51,24 +50,22 @@ class QgsGrassRasterImport : public QgsGrassImport
 {
     Q_OBJECT
   public:
-    // QgsGrassRasterImport takes layer ownership
-    //QgsGrassRasterImport(QgsGrassObject grassObject, QgsRasterLayer* layer);
-    QgsGrassRasterImport(const QgsGrassObject& grassObject, const QString & providerKey, const QString & uri );
+    // takes provider ownership
+    QgsGrassRasterImport( QgsRasterDataProvider* provider, const QgsGrassObject& grassObject );
     ~QgsGrassRasterImport();
     bool import();
-    // start import in thread
-    void start();
+    void importInThread();
+    QString uri() const override { return mProvider ? mProvider->dataSourceUri() : "?"; }
+    // get list of extensions (for bands)
+    static QStringList extensions( QgsRasterDataProvider* provider );
+    // get list of all output names (basename + extension for each band)
+    QStringList names() const override;
   public slots:
     void onFinished();
-  //signals:
-    //void finished(QgsGrassImport *import) override;
   private:
-    static bool run(QgsGrassRasterImport *imp);
-
-    //QgsRasterLayer* mLayer;
-    //QgsRasterDataProvider* mProvider;
+    static bool run( QgsGrassRasterImport *imp );
+    QgsRasterDataProvider* mProvider;
     QFutureWatcher<bool>* mFutureWatcher;
-
 };
 
 #endif // QGSGRASSIMPORT_H

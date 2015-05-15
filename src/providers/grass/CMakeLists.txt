@@ -5,6 +5,7 @@
 INCLUDE_DIRECTORIES(
   ../../core
   ../../core/raster
+  ../../gui
   ${GDAL_INCLUDE_DIR}
   ${PROJ_INCLUDE_DIR}
   ${GEOS_INCLUDE_DIR}
@@ -83,7 +84,10 @@ MACRO(ADD_GRASSLIB GRASS_BUILD_VERSION)
     SET_TARGET_PROPERTIES(grassprovider${GRASS_BUILD_VERSION} PROPERTIES
       COMPILE_FLAGS "-DGRASS_BASE=\\\"${GRASS_PREFIX}\\\" \"-DGRASS_EXPORT=${DLLEXPORT}\" \"-DGRASS_LIB_EXPORT=${DLLIMPORT}\""
     )
-    TARGET_LINK_LIBRARIES(grassprovider${GRASS_BUILD_VERSION} qgisgrass${GRASS_BUILD_VERSION})
+    TARGET_LINK_LIBRARIES(grassprovider${GRASS_BUILD_VERSION} 
+      qgisgrass${GRASS_BUILD_VERSION}
+      qgis_gui      
+    )
 
     #
     # grass raster provider

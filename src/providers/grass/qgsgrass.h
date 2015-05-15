@@ -217,6 +217,9 @@ class QgsGrass
         const QString& mapsetName, const QString& element );
     static GRASS_LIB_EXPORT QStringList elements( const QString&  mapsetPath, const QString&  element );
 
+    // returns true if object (vector, raster, region) exists
+    static GRASS_LIB_EXPORT bool objectExists( const QgsGrassObject& grassObject );
+
     //! Initialize GRASS region
     static GRASS_LIB_EXPORT void initRegion( struct Cell_head *window );
     //! Set region extent

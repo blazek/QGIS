@@ -47,8 +47,9 @@ class QgsGrassMapsetItem : public QgsDirectoryItem
     virtual bool handleDrop( const QMimeData * data, Qt::DropAction action ) override;
 
   public slots:
-    void onImportFinished(QgsGrassImport* import);
+    void onImportFinished( QgsGrassImport* import );
   private:
+    //void showImportError(const QString& error);
     QString mLocation;
     QString mGisdbase;
     // running imports
@@ -139,7 +140,7 @@ class QgsGrassImportItem : public QgsDataItem, public QgsGrassObjectItemBase
 {
     Q_OBJECT
   public:
-    QgsGrassImportItem( QgsDataItem* parent, QgsGrassImport* import, QString path );
+    QgsGrassImportItem( QgsDataItem* parent, const QString& name, const QString& path, QgsGrassImport* import );
 
     //virtual void setState( State state ) override {
     //  QgsDataItem::setState(state);
