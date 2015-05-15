@@ -193,6 +193,8 @@ bool QgsGrassMapsetItem::handleDrop( const QMimeData * data, Qt::DropAction )
     return false;
 
   QgsGrassObject mapsetObject( mGisdbase, mLocation, mName );
+  QgsCoordinateReferenceSystem mapsetCrs = QgsGrass::crsDirect( mGisdbase, mLocation );
+
   QStringList existingRasters = QgsGrass::rasters( mapsetObject.mapsetPath() );
 
   QStringList errors;
@@ -222,7 +224,6 @@ bool QgsGrassMapsetItem::handleDrop( const QMimeData * data, Qt::DropAction )
       QString newName = u.name;
       if ( QgsNewNameDialog::exists( u.name, extensions, existingRasters, cs ) )
       {
-        QgsDebugMsg( "name or derived names exist" );
         QgsNewNameDialog dialog( u.name, u.name, extensions, existingRasters, QRegExp(), cs );
         if ( dialog.exec() != QDialog::Accepted )
         {
@@ -230,6 +231,22 @@ bool QgsGrassMapsetItem::handleDrop( const QMimeData * data, Qt::DropAction )
           continue;
         }
         newName = dialog.name();
+      }
+
+      QgsRectangle newExtent = provider->extent();
+      int newXSize = provider->xSize();
+      int newYSize = provider->ySize();
+      QgsCoordinateReferenceSystem providerCrs = provider->crs();
+      QgsDebugMsg( "providerCrs = " + providerCrs.toWkt() );
+      QgsDebugMsg( "mapsetCrs = " + mapsetCrs.toWkt() );
+      if ( providerCrs.isValid() && mapsetCrs.isValid() && providerCrs != mapsetCrs )
+      {
+        QgsDebugMsg( "different crs -> reproject" );
+        QgsRasterProjector::destExtentSize( providerCrs, mapsetCrs,
+                                            provider->extent(), provider->xSize(), provider->ySize(),
+                                            newExtent, newXSize, newYSize );
+        QgsDebugMsg( "newExtent = " + newExtent.toString() );
+        QgsDebugMsg( QString( "newXSize = %1 newYSize = %2" ).arg( newXSize ).arg( newYSize ) );
       }
 
       QString path = mPath + "/" + "raster" + "/" + u.name;
