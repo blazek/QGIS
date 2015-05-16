@@ -953,7 +953,7 @@ bool QgsRasterProjector::destExtentSize( const QgsCoordinateReferenceSystem& the
     return false;
   }
   QgsCoordinateTransform ct( theSrcCRS, theDestCRS );
-  theDestExtent = ct.transform( theSrcExtent );
+  theDestExtent = ct.transformBoundingBox( theSrcExtent );
 
   // We reproject pixel rectangle from center of source, of course, it gives
   // bigger xRes,yRes than reprojected edges (envelope), it may also be that
@@ -963,7 +963,7 @@ bool QgsRasterProjector::destExtentSize( const QgsCoordinateReferenceSystem& the
   double yRes = theSrcExtent.height() / theSrcYSize;
   QgsPoint srcCenter = theSrcExtent.center();
   QgsRectangle srcCenterRectangle( srcCenter.x() - xRes / 2, srcCenter.y() - yRes / 2, srcCenter.x() + xRes / 2, srcCenter.y() + yRes / 2 );
-  QgsRectangle destCenterRectangle =  ct.transform( srcCenterRectangle );
+  QgsRectangle destCenterRectangle =  ct.transformBoundingBox( srcCenterRectangle );
   theDestXSize = std::max( 1, ( int )( theDestExtent.width() / destCenterRectangle.width() ) );
   theDesYSize = std::max( 1, ( int )( theDestExtent.height() / destCenterRectangle.height() ) );
   return true;
