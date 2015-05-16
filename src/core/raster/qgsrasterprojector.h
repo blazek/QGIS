@@ -105,10 +105,8 @@ class CORE_EXPORT QgsRasterProjector : public QgsRasterInterface
 
     /** Calculate destination extent and size from source extent and size
      */
-    static bool destExtentSize( const QgsCoordinateReferenceSystem& theSrcCRS,
-                                const QgsCoordinateReferenceSystem& theDestCRS,
-                                const QgsRectangle& theSrcExtent, int theSrcXSize, int theSrcYSize,
-                                QgsRectangle& theDestExtent, int& theDestXSize, int& theDesYSize );
+    bool destExtentSize( const QgsRectangle& theSrcExtent, int theSrcXSize, int theSrcYSize,
+                         QgsRectangle& theDestExtent, int& theDestXSize, int& theDesYSize );
 
   private:
     /** get source extent */

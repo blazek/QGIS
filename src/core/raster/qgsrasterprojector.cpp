@@ -943,16 +943,14 @@ QgsRasterBlock * QgsRasterProjector::block( int bandNo, QgsRectangle  const & ex
   return outputBlock;
 }
 
-bool QgsRasterProjector::destExtentSize( const QgsCoordinateReferenceSystem& theSrcCRS,
-    const QgsCoordinateReferenceSystem& theDestCRS,
-    const QgsRectangle& theSrcExtent, int theSrcXSize, int theSrcYSize,
+bool QgsRasterProjector::destExtentSize( const QgsRectangle& theSrcExtent, int theSrcXSize, int theSrcYSize,
     QgsRectangle& theDestExtent, int& theDestXSize, int& theDesYSize )
 {
   if ( theSrcExtent.isEmpty() || theSrcXSize <= 0 || theSrcYSize <= 0 )
   {
     return false;
   }
-  QgsCoordinateTransform ct( theSrcCRS, theDestCRS );
+  QgsCoordinateTransform ct( mSrcCRS, mDestCRS );
   theDestExtent = ct.transformBoundingBox( theSrcExtent );
 
   // We reproject pixel rectangle from center of source, of course, it gives
