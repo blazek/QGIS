@@ -196,6 +196,15 @@ bool QgsGrassMapsetItem::handleDrop( const QMimeData * data, Qt::DropAction )
   QgsCoordinateReferenceSystem mapsetCrs = QgsGrass::crsDirect( mGisdbase, mLocation );
 
   QStringList existingRasters = QgsGrass::rasters( mapsetObject.mapsetPath() );
+  // add currently being imported
+  foreach ( QgsGrassImport* import, mImports )
+  {
+    if ( import && import->grassObject().type() == QgsGrassObject::Raster )
+    {
+      existingRasters.append( import->names() );
+    }
+  }
+  QgsDebugMsg( "existingRasters = " + existingRasters.join( "," ) );
 
   QStringList errors;
   QgsMimeDataUtils::UriList lst = QgsMimeDataUtils::decodeUriList( data );
@@ -246,9 +255,9 @@ bool QgsGrassMapsetItem::handleDrop( const QMimeData * data, Qt::DropAction )
       {
         // TODO: open dialog with size options
         // use location default
-        QgsDebugMsg( "Unknown size -> using default location region");
+        QgsDebugMsg( "Unknown size -> using default location region" );
         struct Cell_head window;
-        if ( !QgsGrass::defaultRegion(mGisdbase, mLocation, &window) )
+        if ( !QgsGrass::defaultRegion( mGisdbase, mLocation, &window ) )
         {
           errors.append( tr( "Cannot get default location region." ) );
           delete provider;
@@ -262,22 +271,21 @@ bool QgsGrassMapsetItem::handleDrop( const QMimeData * data, Qt::DropAction )
       }
 
       QgsRasterPipe* pipe = new QgsRasterPipe();
-      pipe->set(provider);
+      pipe->set( provider );
 
       QgsCoordinateReferenceSystem providerCrs = provider->crs();
       QgsDebugMsg( "providerCrs = " + providerCrs.toWkt() );
       QgsDebugMsg( "mapsetCrs = " + mapsetCrs.toWkt() );
       if ( providerCrs.isValid() && mapsetCrs.isValid() && providerCrs != mapsetCrs )
       {
-        if ( useSrcRegion )
-        {
-          QgsRasterProjector::destExtentSize( providerCrs, mapsetCrs,
-                                              provider->extent(), provider->xSize(), provider->ySize(),
-                                              newExtent, newXSize, newYSize );
-        }
-
         QgsRasterProjector * projector = new QgsRasterProjector;
         projector->setCRS( providerCrs, mapsetCrs );
+        if ( useSrcRegion )
+        {
+          projector->destExtentSize( provider->extent(), provider->xSize(), provider->ySize(),
+                                     newExtent, newXSize, newYSize );
+        }
+
         pipe->set( projector );
       }
       QgsDebugMsg( "newExtent = " + newExtent.toString() );
@@ -286,7 +294,7 @@ bool QgsGrassMapsetItem::handleDrop( const QMimeData * data, Qt::DropAction )
       QString path = mPath + "/" + "raster" + "/" + u.name;
       QgsGrassObject rasterObject( mGisdbase, mLocation, mName, newName, QgsGrassObject::Raster );
       QgsGrassRasterImport *import = new QgsGrassRasterImport( pipe, rasterObject,
-                                                               newExtent, newXSize, newYSize); // takes pipe ownership
+          newExtent, newXSize, newYSize ); // takes pipe ownership
       connect( import, SIGNAL( finished( QgsGrassImport* ) ), SLOT( onImportFinished( QgsGrassImport* ) ) );
 
       // delete existing files (confirmed before in dialog)
@@ -313,6 +321,8 @@ bool QgsGrassMapsetItem::handleDrop( const QMimeData * data, Qt::DropAction )
 
       import->importInThread();
       mImports.append( import );
+      existingRasters.append( import->names() );
+      refresh(); // after each new item so that it is visible if dialog is opened on next item
     }
     else
     {
@@ -328,7 +338,6 @@ bool QgsGrassMapsetItem::handleDrop( const QMimeData * data, Qt::DropAction )
     output->showMessage();
   }
 
-  refresh();
   return true;
 }
 

@@ -13,6 +13,7 @@
  *   (at your option) any later version.                                   *
  *                                                                         *
  ***************************************************************************/
+#include <unistd.h>
 
 #include <QByteArray>
 #include <QtConcurrentRun>
@@ -49,13 +50,13 @@ QString QgsGrassImport::error()
 
 //------------------------------ QgsGrassRasterImport ------------------------------------
 QgsGrassRasterImport::QgsGrassRasterImport( QgsRasterPipe* pipe, const QgsGrassObject& grassObject,
-                                            const QgsRectangle &extent, int xSize, int ySize)
+    const QgsRectangle &extent, int xSize, int ySize )
     : QgsGrassImport( grassObject )
     //, mProvider( provider )
-    , mPipe(pipe)
-    , mExtent(extent)
-    , mXSize(xSize)
-    , mYSize(ySize)
+    , mPipe( pipe )
+    , mExtent( extent )
+    , mXSize( xSize )
+    , mYSize( ySize )
     , mFutureWatcher( 0 )
 {
 }
@@ -187,6 +188,7 @@ bool QgsGrassRasterImport::import()
     {
       for ( int row = 0; row < iterRows; row++ )
       {
+        sleep( 1 ); // debug
         if ( !block->convert( qgis_out_type ) )
         {
           setError( "cannot vonvert data type" );

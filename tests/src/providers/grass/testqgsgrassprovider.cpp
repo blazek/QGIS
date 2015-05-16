@@ -474,23 +474,22 @@ void TestQgsGrassProvider::rasterImport()
     int newYSize = provider->ySize();
 
     QgsRasterPipe* pipe = new QgsRasterPipe();
-    pipe->set(provider);
+    pipe->set( provider );
 
     QgsCoordinateReferenceSystem providerCrs = provider->crs();
     if ( providerCrs.isValid() && mapsetCrs.isValid() && providerCrs != mapsetCrs )
     {
-      QgsRasterProjector::destExtentSize( providerCrs, mapsetCrs,
-                                          provider->extent(), provider->xSize(), provider->ySize(),
-                                          newExtent, newXSize, newYSize );
-
       QgsRasterProjector * projector = new QgsRasterProjector;
       projector->setCRS( providerCrs, mapsetCrs );
+      projector->destExtentSize( provider->extent(), provider->xSize(), provider->ySize(),
+                                 newExtent, newXSize, newYSize );
+
       pipe->set( projector );
     }
 
     QgsGrassObject rasterObject( tmpGisdbase, tmpLocation, tmpMapset, name, QgsGrassObject::Raster );
     QgsGrassRasterImport *import = new QgsGrassRasterImport( pipe, rasterObject,
-                                                             newExtent, newXSize, newYSize );
+        newExtent, newXSize, newYSize );
     if ( !import->import() )
     {
       reportRow( "import failed: " +  import->error() );
