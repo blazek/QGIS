@@ -13,8 +13,6 @@
  *   (at your option) any later version.                                   *
  *                                                                         *
  ***************************************************************************/
-#include <unistd.h>
-
 #include <QByteArray>
 #include <QtConcurrentRun>
 
@@ -188,7 +186,6 @@ bool QgsGrassRasterImport::import()
     {
       for ( int row = 0; row < iterRows; row++ )
       {
-        sleep( 1 ); // debug
         if ( !block->convert( qgis_out_type ) )
         {
           setError( "cannot vonvert data type" );
