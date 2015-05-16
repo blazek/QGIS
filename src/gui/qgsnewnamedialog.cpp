@@ -48,7 +48,6 @@ QgsNewNameDialog::QgsNewNameDialog(const QString& source, const QString& initial
     hintString = tr("Enter new %1 for %2").arg(nameDesc).arg(source);
   }
   QLabel* hintLabel = new QLabel( hintString, this );
-  //hintLabel->setWordWrap(true);
   layout()->addWidget( hintLabel );
 
   mLineEdit = new QLineEdit( initial, this );
@@ -78,7 +77,7 @@ QgsNewNameDialog::QgsNewNameDialog(const QString& source, const QString& initial
 
 QString QgsNewNameDialog::highlightText(const QString& text)
 {
-  return "<font color='red'>" + text + "</font>";
+  return "<b>" + text + "</b>";
 }
 
 void QgsNewNameDialog::nameChanged()
