@@ -48,9 +48,14 @@ QString QgsGrassImport::error()
 }
 
 //------------------------------ QgsGrassRasterImport ------------------------------------
-QgsGrassRasterImport::QgsGrassRasterImport( QgsRasterDataProvider* provider, const QgsGrassObject& grassObject )
+QgsGrassRasterImport::QgsGrassRasterImport( QgsRasterPipe* pipe, const QgsGrassObject& grassObject,
+                                            const QgsRectangle &extent, int xSize, int ySize)
     : QgsGrassImport( grassObject )
-    , mProvider( provider )
+    //, mProvider( provider )
+    , mPipe(pipe)
+    , mExtent(extent)
+    , mXSize(xSize)
+    , mYSize(ySize)
     , mFutureWatcher( 0 )
 {
 }
@@ -62,7 +67,8 @@ QgsGrassRasterImport::~QgsGrassRasterImport()
     QgsDebugMsg( "mFutureWatcher not finished -> waitForFinished()" );
     mFutureWatcher->waitForFinished();
   }
-  delete mProvider;
+  //delete mProvider;
+  delete mPipe;
 }
 
 void QgsGrassRasterImport::importInThread()
@@ -83,31 +89,31 @@ bool QgsGrassRasterImport::run( QgsGrassRasterImport *imp )
 bool QgsGrassRasterImport::import()
 {
   QgsDebugMsg( "entered" );
-  if ( !mProvider )
+  if ( !mPipe )
   {
-    setError( "provider is null" );
-    return false;
-  }
-  if ( !mProvider->isValid() )
-  {
-    setError( "provider is not valid" );
-    return false;
-  }
-  // TODO: size / extent dialog
-  if ( !( mProvider->capabilities() & QgsRasterInterface::Size ) || mProvider->xSize() == 0 || mProvider->ySize() == 0 )
-  {
-    setError( "unknown data source size" );
+    setError( "Pipe is null." );
     return false;
   }
 
-  QgsDebugMsg( "extent = " + mProvider->extent().toString() );
+  QgsRasterDataProvider * provider = mPipe->provider();
+  if ( !provider )
+  {
+    setError( "Pipe has no provider." );
+    return false;
+  }
 
-  for ( int band = 1; band <= mProvider->bandCount(); band++ )
+  if ( !provider->isValid() )
+  {
+    setError( "Provider is not valid." );
+    return false;
+  }
+
+  for ( int band = 1; band <= provider->bandCount(); band++ )
   {
     QgsDebugMsg( QString( "band = %1" ).arg( band ) );
     QGis::DataType qgis_out_type = QGis::UnknownDataType;
     RASTER_MAP_TYPE data_type = -1;
-    switch ( mProvider->dataType( band ) )
+    switch ( provider->dataType( band ) )
     {
       case QGis::Byte:
       case QGis::UInt16:
@@ -131,7 +137,7 @@ bool QgsGrassRasterImport::import()
       case QGis::CFloat32:
       case QGis::CFloat64:
       case QGis::UnknownDataType:
-        setError( tr( "Data type %1 not supported" ).arg( mProvider->dataType( band ) ) );
+        setError( tr( "Data type %1 not supported" ).arg( provider->dataType( band ) ) );
         return false;
     }
 
@@ -140,7 +146,7 @@ bool QgsGrassRasterImport::import()
     QString module = QgsGrass::qgisGrassModulePath() + "/qgis.r.in";
     QStringList arguments;
     QString name = mGrassObject.name();
-    if ( mProvider->bandCount() > 1 )
+    if ( provider->bandCount() > 1 )
     {
       name += QString( "_%1" ).arg( band );
     }
@@ -159,18 +165,18 @@ bool QgsGrassRasterImport::import()
 
     QDataStream outStream( process );
 
-    outStream << mProvider->extent() << ( qint32 )mProvider->xSize() << ( qint32 )mProvider->ySize();
+    outStream << mExtent << ( qint32 )mXSize << ( qint32 )mYSize;
     outStream << ( qint32 )qgis_out_type;
 
     // calculate reasonable block size (5MB)
-    int maximumTileHeight = 5000000 / mProvider->xSize();
+    int maximumTileHeight = 5000000 / mXSize;
     maximumTileHeight = std::max( 1, maximumTileHeight );
 
-    QgsRasterIterator iter( mProvider );
-    iter.setMaximumTileWidth( mProvider->xSize() );
+    QgsRasterIterator iter( mPipe->last() );
+    iter.setMaximumTileWidth( mXSize );
     iter.setMaximumTileHeight( maximumTileHeight );
 
-    iter.startRasterRead( band, mProvider->xSize(), mProvider->ySize(), mProvider->extent() );
+    iter.startRasterRead( band, mXSize, mYSize, mExtent );
 
     int iterLeft = 0;
     int iterTop = 0;
@@ -185,7 +191,6 @@ bool QgsGrassRasterImport::import()
         {
           setError( "cannot vonvert data type" );
           delete block;
-          delete mProvider;
           return false;
         }
         char * data = block->bits( row, 0 );
@@ -233,6 +238,15 @@ void QgsGrassRasterImport::onFinished()
   emit finished( this );
 }
 
+QString QgsGrassRasterImport::uri() const
+{
+  if ( !mPipe || !mPipe->provider() )
+  {
+    return "";
+  }
+  return mPipe->provider()->dataSourceUri();
+}
+
 QStringList QgsGrassRasterImport::extensions( QgsRasterDataProvider* provider )
 {
   QStringList list;
@@ -249,9 +263,12 @@ QStringList QgsGrassRasterImport::extensions( QgsRasterDataProvider* provider )
 QStringList QgsGrassRasterImport::names() const
 {
   QStringList list;
-  foreach ( QString ext, extensions( mProvider ) )
+  if ( mPipe && mPipe->provider() )
   {
-    list << mGrassObject.name() + ext;
+    foreach ( QString ext, extensions( mPipe->provider() ) )
+    {
+      list << mGrassObject.name() + ext;
+    }
   }
   if ( list.isEmpty() )
   {

@@ -227,6 +227,8 @@ class QgsGrass
     /** Init region, set extent, rows and cols and adjust.
      * Returns error if adjustment failed. */
     static GRASS_LIB_EXPORT QString setRegion( struct Cell_head *window, QgsRectangle rect, int rows, int cols );
+    //! Get extent from region
+    static GRASS_LIB_EXPORT QgsRectangle extent( struct Cell_head *window );
 
     // ! Get map region
     static GRASS_LIB_EXPORT bool mapRegion( QgsGrassObject::Type type, QString gisdbase,
@@ -235,6 +237,10 @@ class QgsGrass
 
     // ! String representation of region
     static GRASS_LIB_EXPORT QString regionString( const struct Cell_head *window );
+
+    // ! Read location default region (DEFAULT_WIND)
+    static GRASS_LIB_EXPORT bool defaultRegion( const QString& gisdbase, const QString& location,
+                                         struct Cell_head *window );
 
     // ! Read current mapset region
     static GRASS_LIB_EXPORT bool region( const QString& gisdbase, const QString& location, const QString& mapset,

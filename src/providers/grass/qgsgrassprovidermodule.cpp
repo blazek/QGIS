@@ -234,24 +234,59 @@ bool QgsGrassMapsetItem::handleDrop( const QMimeData * data, Qt::DropAction )
       }
 
       QgsRectangle newExtent = provider->extent();
-      int newXSize = provider->xSize();
-      int newYSize = provider->ySize();
+      int newXSize;
+      int newYSize;
+      bool useSrcRegion = true;
+      if ( provider->capabilities() & QgsRasterInterface::Size )
+      {
+        newXSize = provider->xSize();
+        newYSize = provider->ySize();
+      }
+      else
+      {
+        // TODO: open dialog with size options
+        // use location default
+        QgsDebugMsg( "Unknown size -> using default location region");
+        struct Cell_head window;
+        if ( !QgsGrass::defaultRegion(mGisdbase, mLocation, &window) )
+        {
+          errors.append( tr( "Cannot get default location region." ) );
+          delete provider;
+          continue;
+        }
+        newXSize = window.cols;
+        newYSize = window.rows;
+
+        newExtent = QgsGrass::extent( &window );
+        useSrcRegion = false;
+      }
+
+      QgsRasterPipe* pipe = new QgsRasterPipe();
+      pipe->set(provider);
+
       QgsCoordinateReferenceSystem providerCrs = provider->crs();
       QgsDebugMsg( "providerCrs = " + providerCrs.toWkt() );
       QgsDebugMsg( "mapsetCrs = " + mapsetCrs.toWkt() );
       if ( providerCrs.isValid() && mapsetCrs.isValid() && providerCrs != mapsetCrs )
       {
-        QgsDebugMsg( "different crs -> reproject" );
-        QgsRasterProjector::destExtentSize( providerCrs, mapsetCrs,
-                                            provider->extent(), provider->xSize(), provider->ySize(),
-                                            newExtent, newXSize, newYSize );
-        QgsDebugMsg( "newExtent = " + newExtent.toString() );
-        QgsDebugMsg( QString( "newXSize = %1 newYSize = %2" ).arg( newXSize ).arg( newYSize ) );
+        if ( useSrcRegion )
+        {
+          QgsRasterProjector::destExtentSize( providerCrs, mapsetCrs,
+                                              provider->extent(), provider->xSize(), provider->ySize(),
+                                              newExtent, newXSize, newYSize );
+        }
+
+        QgsRasterProjector * projector = new QgsRasterProjector;
+        projector->setCRS( providerCrs, mapsetCrs );
+        pipe->set( projector );
       }
+      QgsDebugMsg( "newExtent = " + newExtent.toString() );
+      QgsDebugMsg( QString( "newXSize = %1 newYSize = %2" ).arg( newXSize ).arg( newYSize ) );
 
       QString path = mPath + "/" + "raster" + "/" + u.name;
       QgsGrassObject rasterObject( mGisdbase, mLocation, mName, newName, QgsGrassObject::Raster );
-      QgsGrassRasterImport *import = new QgsGrassRasterImport( provider, rasterObject ); // takes provider ownership
+      QgsGrassRasterImport *import = new QgsGrassRasterImport( pipe, rasterObject,
+                                                               newExtent, newXSize, newYSize); // takes pipe ownership
       connect( import, SIGNAL( finished( QgsGrassImport* ) ), SLOT( onImportFinished( QgsGrassImport* ) ) );
 
       // delete existing files (confirmed before in dialog)

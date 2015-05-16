@@ -446,9 +446,10 @@ void TestQgsGrassProvider::rasterImport()
   }
 
   QStringList rasterFiles;
-  rasterFiles << "tenbytenraster.asc" << "raster/band1_byte_ct_epsg4326.tif" << "raster/band1_int16_noct_epsg4326.tif";
+  rasterFiles << "tenbytenraster.asc" << "landsat.tif" << "raster/band1_byte_ct_epsg4326.tif" << "raster/band1_int16_noct_epsg4326.tif";
   rasterFiles << "raster/band1_float32_noct_epsg4326.tif" << "raster/band3_int16_noct_epsg4326.tif";
 
+  QgsCoordinateReferenceSystem mapsetCrs = QgsGrass::crsDirect( mGisdbase, mLocation );
   foreach ( QString rasterFile, rasterFiles )
   {
     QString uri = QString( TEST_DATA_DIR ) + "/" + rasterFile;
@@ -467,8 +468,29 @@ void TestQgsGrassProvider::rasterImport()
       ok = false;
       continue;
     }
+
+    QgsRectangle newExtent = provider->extent();
+    int newXSize = provider->xSize();
+    int newYSize = provider->ySize();
+
+    QgsRasterPipe* pipe = new QgsRasterPipe();
+    pipe->set(provider);
+
+    QgsCoordinateReferenceSystem providerCrs = provider->crs();
+    if ( providerCrs.isValid() && mapsetCrs.isValid() && providerCrs != mapsetCrs )
+    {
+      QgsRasterProjector::destExtentSize( providerCrs, mapsetCrs,
+                                          provider->extent(), provider->xSize(), provider->ySize(),
+                                          newExtent, newXSize, newYSize );
+
+      QgsRasterProjector * projector = new QgsRasterProjector;
+      projector->setCRS( providerCrs, mapsetCrs );
+      pipe->set( projector );
+    }
+
     QgsGrassObject rasterObject( tmpGisdbase, tmpLocation, tmpMapset, name, QgsGrassObject::Raster );
-    QgsGrassRasterImport *import = new QgsGrassRasterImport( provider, rasterObject );
+    QgsGrassRasterImport *import = new QgsGrassRasterImport( pipe, rasterObject,
+                                                             newExtent, newXSize, newYSize );
     if ( !import->import() )
     {
       reportRow( "import failed: " +  import->error() );

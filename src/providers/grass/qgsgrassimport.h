@@ -21,6 +21,7 @@
 
 #include "qgslogger.h"
 #include "qgsrasterdataprovider.h"
+#include "qgsrasterpipe.h"
 
 #include "qgsgrass.h"
 
@@ -50,12 +51,14 @@ class QgsGrassRasterImport : public QgsGrassImport
 {
     Q_OBJECT
   public:
-    // takes provider ownership
-    QgsGrassRasterImport( QgsRasterDataProvider* provider, const QgsGrassObject& grassObject );
+    // takes pipe ownership
+    //QgsGrassRasterImport( QgsRasterDataProvider* provider, const QgsGrassObject& grassObject );
+    QgsGrassRasterImport( QgsRasterPipe* pipe, const QgsGrassObject& grassObject,
+                          const QgsRectangle &extent, int xSize, int ySize);
     ~QgsGrassRasterImport();
     bool import();
     void importInThread();
-    QString uri() const override { return mProvider ? mProvider->dataSourceUri() : "?"; }
+    QString uri() const override;
     // get list of extensions (for bands)
     static QStringList extensions( QgsRasterDataProvider* provider );
     // get list of all output names (basename + extension for each band)
@@ -64,7 +67,11 @@ class QgsGrassRasterImport : public QgsGrassImport
     void onFinished();
   private:
     static bool run( QgsGrassRasterImport *imp );
-    QgsRasterDataProvider* mProvider;
+    //QgsRasterDataProvider* mProvider;
+    QgsRasterPipe* mPipe;
+    QgsRectangle mExtent;
+    int mXSize;
+    int mYSize;
     QFutureWatcher<bool>* mFutureWatcher;
 };
 
