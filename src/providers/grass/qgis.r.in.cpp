@@ -43,11 +43,6 @@ extern "C"
 #include "qgsrasterblock.h"
 #include "qgsgrass.h"
 
-//#ifdef _MSC_VER
-//#define INFINITY (DBL_MAX+DBL_MAX)
-//#define NAN (INFINITY-INFINITY)
-//#endif
-
 #if GRASS_VERSION_MAJOR >= 7
 #define G_allocate_raster_buf Rast_allocate_buf
 #define G_close_cell Rast_close
@@ -76,7 +71,6 @@ int main( int argc, char **argv )
   G_gisinit( argv[0] );
 
   module = G_define_module();
-  module->description = ( "Output raster map layers in a format suitable for display in QGIS" );
 
   map = G_define_standard_option( G_OPT_R_OUTPUT );
 
@@ -94,9 +88,6 @@ int main( int argc, char **argv )
   qint32 rows, cols;
   stdinStream >> extent >> cols >> rows;
 
-  //G_fatal_error("i = %d", i);
-  //G_fatal_error( extent.toString().toAscii().data() );
-
   QString err = QgsGrass::setRegion( &window, extent, rows, cols);
   if ( !err.isEmpty() )
   {
@@ -107,7 +98,6 @@ int main( int argc, char **argv )
 
   QGis::DataType qgis_type;
   qint32 type;
-  //stdinStream >> grass_type;
   stdinStream >>type;
   qgis_type = (QGis::DataType)type;
 

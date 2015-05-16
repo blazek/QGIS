@@ -50,7 +50,6 @@ QString QgsGrassImport::error()
 QgsGrassRasterImport::QgsGrassRasterImport( QgsRasterPipe* pipe, const QgsGrassObject& grassObject,
     const QgsRectangle &extent, int xSize, int ySize )
     : QgsGrassImport( grassObject )
-    //, mProvider( provider )
     , mPipe( pipe )
     , mExtent( extent )
     , mXSize( xSize )
@@ -66,7 +65,6 @@ QgsGrassRasterImport::~QgsGrassRasterImport()
     QgsDebugMsg( "mFutureWatcher not finished -> waitForFinished()" );
     mFutureWatcher->waitForFinished();
   }
-  //delete mProvider;
   delete mPipe;
 }
 
@@ -273,5 +271,128 @@ QStringList QgsGrassRasterImport::names() const
   {
     list << mGrassObject.name();
   }
+  return list;
+}
+
+//------------------------------ QgsGrassVectorImport ------------------------------------
+QgsGrassVectorImport::QgsGrassVectorImport( QgsVectorDataProvider* provider, const QgsGrassObject& grassObject )
+    : QgsGrassImport( grassObject )
+    , mProvider( provider )
+    , mFutureWatcher( 0 )
+{
+}
+
+QgsGrassVectorImport::~QgsGrassVectorImport()
+{
+  if ( mFutureWatcher && !mFutureWatcher->isFinished() )
+  {
+    QgsDebugMsg( "mFutureWatcher not finished -> waitForFinished()" );
+    mFutureWatcher->waitForFinished();
+  }
+  delete mProvider;
+}
+
+void QgsGrassVectorImport::importInThread()
+{
+  QgsDebugMsg( "entered" );
+  mFutureWatcher = new QFutureWatcher<bool>( this );
+  connect( mFutureWatcher, SIGNAL( finished() ), SLOT( onFinished() ) );
+  mFutureWatcher->setFuture( QtConcurrent::run( run, this ) );
+}
+
+bool QgsGrassVectorImport::run( QgsGrassVectorImport *imp )
+{
+  QgsDebugMsg( "entered" );
+  imp->import();
+  return true;
+}
+
+bool QgsGrassVectorImport::import()
+{
+  QgsDebugMsg( "entered" );
+
+  if ( !mProvider )
+  {
+    setError( "Provider is null." );
+    return false;
+  }
+
+  if ( !mProvider->isValid() )
+  {
+    setError( "Provider is not valid." );
+    return false;
+  }
+
+  //QgsDebugMsg( QString( "data_type = %1" ).arg( data_type ) );
+
+  QString module = QgsGrass::qgisGrassModulePath() + "/qgis.v.in";
+  QStringList arguments;
+  QString name = mGrassObject.name();
+  arguments.append( "output=" + name );
+  QTemporaryFile gisrcFile;
+  QProcess* process = 0;
+  try
+  {
+    process = QgsGrass::startModule( mGrassObject.gisdbase(), mGrassObject.location(), mGrassObject.mapset(), module, arguments, gisrcFile );
+  }
+  catch ( QgsGrass::Exception &e )
+  {
+    setError( e.what() );
+    return false;
+  }
+
+  QDataStream outStream( process );
+
+  outStream <<  ( qint32 )mProvider->geometryType();
+
+  process->closeWriteChannel();
+  process->waitForFinished( 5000 );
+
+  QString stdoutString = process->readAllStandardOutput().data();
+  QString stderrString = process->readAllStandardError().data();
+
+  QString processResult = QString( "exitStatus=%1, exitCode=%2, errorCode=%3, error=%4 stdout=%5, stderr=%6" )
+                          .arg( process->exitStatus() ).arg( process->exitCode() )
+                          .arg( process->error() ).arg( process->errorString() )
+                          .arg( stdoutString ).arg( stderrString );
+  QgsDebugMsg( "processResult: " + processResult );
+
+  if ( process->exitStatus() != QProcess::NormalExit )
+  {
+    setError( process->errorString() );
+    delete process;
+    return false;
+  }
+
+  if ( process->exitCode() != 0 )
+  {
+    setError( stderrString );
+    delete process;
+    return false;
+  }
+
+  delete process;
+  return true;
+}
+
+void QgsGrassVectorImport::onFinished()
+{
+  QgsDebugMsg( "entered" );
+  emit finished( this );
+}
+
+QString QgsGrassVectorImport::uri() const
+{
+  if ( !mProvider )
+  {
+    return "";
+  }
+  return mProvider->dataSourceUri();
+}
+
+QStringList QgsGrassVectorImport::names() const
+{
+  QStringList list;
+  list << mGrassObject.name();
   return list;
 }

@@ -20,8 +20,8 @@
 #include <QObject>
 
 #include "qgslogger.h"
-#include "qgsrasterdataprovider.h"
 #include "qgsrasterpipe.h"
+#include "qgsvectordataprovider.h"
 
 #include "qgsgrass.h"
 
@@ -52,7 +52,6 @@ class QgsGrassRasterImport : public QgsGrassImport
     Q_OBJECT
   public:
     // takes pipe ownership
-    //QgsGrassRasterImport( QgsRasterDataProvider* provider, const QgsGrassObject& grassObject );
     QgsGrassRasterImport( QgsRasterPipe* pipe, const QgsGrassObject& grassObject,
                           const QgsRectangle &extent, int xSize, int ySize);
     ~QgsGrassRasterImport();
@@ -67,11 +66,30 @@ class QgsGrassRasterImport : public QgsGrassImport
     void onFinished();
   private:
     static bool run( QgsGrassRasterImport *imp );
-    //QgsRasterDataProvider* mProvider;
     QgsRasterPipe* mPipe;
     QgsRectangle mExtent;
     int mXSize;
     int mYSize;
+    QFutureWatcher<bool>* mFutureWatcher;
+};
+
+class QgsGrassVectorImport : public QgsGrassImport
+{
+    Q_OBJECT
+  public:
+    // takes provider ownership
+    QgsGrassVectorImport( QgsVectorDataProvider* provider, const QgsGrassObject& grassObject );
+    ~QgsGrassVectorImport();
+    bool import();
+    void importInThread();
+    QString uri() const override;
+    // get list of all output names
+    QStringList names() const override;
+  public slots:
+    void onFinished();
+  private:
+    static bool run( QgsGrassVectorImport *imp );
+    QgsVectorDataProvider* mProvider;
     QFutureWatcher<bool>* mFutureWatcher;
 };
 

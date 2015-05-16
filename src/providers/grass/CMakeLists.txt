@@ -172,6 +172,24 @@ MACRO(ADD_GRASSLIB GRASS_BUILD_VERSION)
       )
     ENDIF (GRASS_MAJOR_VERSION LESS 7 )
 
+    #
+    # grass vector import module
+    #
+    ADD_EXECUTABLE(qgis.v.in${GRASS_BUILD_VERSION} ../qgis.v.in.cpp)
+    SET_TARGET_PROPERTIES(qgis.v.in${GRASS_BUILD_VERSION} PROPERTIES
+      COMPILE_FLAGS "-DGRASS_BASE=\\\"${GRASS_PREFIX}\\\" \"-DGRASS_LIB_EXPORT=${DLLEXPORT}\" \"-DGRASS_EXPORT=${DLLIMPORT}\""
+    )
+    TARGET_LINK_LIBRARIES(qgis.v.in${GRASS_BUILD_VERSION}
+      qgisgrass${GRASS_BUILD_VERSION}
+      ${GRASS_LIBRARY${GRASS_BUILD_VERSION}_gis}
+      ${GRASS_LIBRARY${GRASS_BUILD_VERSION}_datetime}
+      ${GRASS_LIBRARY${GRASS_BUILD_VERSION}_vect}
+      ${GRASS_LIBRARY${GRASS_BUILD_VERSION}_dbmibase}
+      ${GRASS_LIBRARY${GRASS_BUILD_VERSION}_dbmiclient}
+      ${GDAL_LIBRARY}
+      qgis_core
+    )
+
     ########################################################
     # Install
 
