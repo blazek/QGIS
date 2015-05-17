@@ -98,6 +98,7 @@ int main( int argc, char **argv )
   stdinStream >> typeQint32;
   QGis::WkbType wkbType = ( QGis::WkbType )typeQint32;
   QGis::WkbType wkbFlatType = QGis::flatType( wkbType );
+#if 0
   int type = 0;
   switch ( QGis::singleType( wkbFlatType ) )
   {
@@ -113,6 +114,47 @@ int main( int argc, char **argv )
     default:
       type = QGis::WKBUnknown;
   }
+#endif
+
+  QgsFields srcFields;
+  stdinStream >> srcFields;
+  // TODO: find (in QgsGrassVectorImport) if there is unique 'id' or 'cat' field and use it as cat
+  int keyNum = 1;
+  QString key;
+  while ( true )
+  {
+    key = "cat" + ( keyNum == 1 ? "" : QString::number( keyNum ) );
+    if ( srcFields.indexFromName( key ) == -1 )
+    {
+      break;
+    }
+    keyNum++;
+  }
+
+  QgsFields fields;
+  fields.append( QgsField( key, QVariant::Int ) );
+  fields.extend( srcFields );
+
+  struct field_info *fieldInfo = Vect_default_field_info( &map, 1, NULL, GV_1TABLE );
+  if ( Vect_map_add_dblink( &map, 1, NULL, fieldInfo->table, key.toLatin1().data(),
+                            fieldInfo->database, fieldInfo->driver ) != 0 )
+  {
+    G_fatal_error( "Cannot add link" );
+  }
+
+  dbDriver *driver = db_start_driver_open_database( fieldInfo->driver, fieldInfo->database );
+  if ( !driver )
+  {
+    G_fatal_error( "Cannot open database %s by driver %s", fieldInfo->database, fieldInfo->driver );
+  }
+  try
+  {
+    QgsGrass::createTable( driver, QString( fieldInfo->table ), fields );
+  }
+  catch ( QgsGrass::Exception &e )
+  {
+    G_fatal_error( "Cannot create table: %s", e.what() );
+  }
 
   QgsFeature feature;
   //struct line_pnts *line = Vect_new_line_struct();
@@ -127,6 +169,7 @@ int main( int argc, char **argv )
       break;
     }
     Vect_reset_cats( cats );
+    Vect_cat_set( cats, 1, ( int )feature.id() );
 
     QgsGeometry* geometry = feature.geometry();
     if ( geometry )
@@ -181,13 +224,20 @@ int main( int argc, char **argv )
         G_fatal_error( "Geometry type not supported" );
       }
 
-
-
+      QgsAttributes attributes = feature.attributes();
+      attributes.insert( 0, QVariant( feature.id() ) );
+      try
+      {
+        QgsGrass::insertRow( driver, QString( fieldInfo->table ), attributes );
+      }
+      catch ( QgsGrass::Exception &e )
+      {
+        G_fatal_error( "Cannot insert: %s", e.what() );
+      }
     }
     featureCount++;
   }
-  //G_fatal_error("wkbType = %d", wkbType);
-  //G_fatal_error("count = %d", count);
+  db_close_database_shutdown_driver( driver );
   stdoutStream << featureCount;
 
   Vect_copy_map_lines( &tmpMap, &map );

@@ -349,6 +349,8 @@ bool QgsGrassVectorImport::import()
 
   outStream << ( qint32 )mProvider->geometryType();
 
+  outStream << mProvider->fields();
+
   QgsFeatureIterator iterator = mProvider->getFeatures();
   QgsFeature feature;
   while ( iterator.nextFeature( feature ) )

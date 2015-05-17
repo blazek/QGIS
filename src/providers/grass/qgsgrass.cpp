@@ -26,6 +26,7 @@
 #include "qgslogger.h"
 #include "qgsapplication.h"
 #include "qgscoordinatereferencesystem.h"
+#include "qgsfield.h"
 #include "qgsrectangle.h"
 #include "qgsconfig.h"
 
@@ -1155,13 +1156,13 @@ QString GRASS_LIB_EXPORT QgsGrass::regionString( const struct Cell_head *window 
 
 
 bool GRASS_LIB_EXPORT QgsGrass::defaultRegion( const QString& gisdbase, const QString& location,
-                                               struct Cell_head *window )
+    struct Cell_head *window )
 {
-  initRegion(window);
+  initRegion( window );
   QgsGrass::setLocation( gisdbase, location );
   try
   {
-    G_get_default_window(window);
+    G_get_default_window( window );
     return true;
   }
   catch ( QgsGrass::Exception &e )
@@ -1315,11 +1316,11 @@ QString GRASS_LIB_EXPORT QgsGrass::setRegion( struct Cell_head *window, QgsRecta
 
 QgsRectangle GRASS_LIB_EXPORT QgsGrass::extent( struct Cell_head *window )
 {
-  if (!window)
+  if ( !window )
   {
     return QgsRectangle();
   }
-  return QgsRectangle( window->west, window->south, window->east, window->north);
+  return QgsRectangle( window->west, window->south, window->east, window->north );
 }
 
 bool GRASS_LIB_EXPORT QgsGrass::mapRegion( QgsGrassObject::Type type, QString gisdbase,
@@ -1789,6 +1790,127 @@ bool QgsGrass::deleteObjectDialog( const QgsGrassObject & object )
   return QMessageBox::question( 0, QObject::tr( "Delete confirmation" ),
                                 QObject::tr( "Are you sure you want to delete %1 %2?" ).arg( object.elementName() ).arg( object.name() ),
                                 QMessageBox::Yes | QMessageBox::No ) == QMessageBox::Yes;
+}
+
+void QgsGrass::createTable( dbDriver *driver, const QString tableName, const QgsFields &fields )
+{
+  if ( !driver ) // should not happen
+  {
+    throw QgsGrass::Exception( "driver is null" );
+  }
+
+  QStringList fieldsStringList;
+  for ( int i = 0; i < fields.size(); i++ )
+  {
+    QgsField field = fields.field( i );
+    QString name = field.name().toLower().replace( " ", "_" );
+    if ( name.at( 0 ).isDigit() )
+    {
+      name = "_" + name;
+    }
+    QString typeName;
+    switch ( field.type() )
+    {
+      case QVariant::Int:
+      case QVariant::LongLong:
+      case QVariant::Bool:
+        typeName = "integer";
+        break;
+      case QVariant::Double:
+        typeName = "double precision";
+        break;
+      case QVariant::Date:
+        typeName = "date";
+        break;
+      case QVariant::Time:
+        typeName = "time";
+        break;
+      case QVariant::DateTime:
+        typeName = "datetime";
+        break;
+      case QVariant::String:
+        typeName = QString( "varchar (%1)" ).arg( field.length() );
+        break;
+      default:
+        typeName = QString( "varchar (%1)" ).arg( field.length() > 0 ? field.length() : 255 );
+    }
+    fieldsStringList <<  name + " " + typeName;
+  }
+  QString sql = QString( "create table %1 (%2);" ).arg( tableName ).arg( fieldsStringList.join( ", " ) );
+
+  dbString dbstr;
+  db_init_string( &dbstr );
+  db_set_string( &dbstr, sql.toLatin1().data() );
+
+  int result = db_execute_immediate( driver, &dbstr );
+  db_free_string( &dbstr );
+  if ( result != DB_OK )
+  {
+    throw QgsGrass::Exception( QObject::tr( "Cannot create table" ) + ": " + QString::fromLatin1( db_get_error_msg() ) );
+  }
+}
+
+void QgsGrass::insertRow( dbDriver *driver, const QString tableName,
+                          const QgsAttributes& attributes )
+{
+  if ( !driver ) // should not happen
+  {
+    throw QgsGrass::Exception( "driver is null" );
+  }
+
+  QStringList valuesStringList;
+  foreach ( QVariant attribute, attributes )
+  {
+    QString valueString;
+
+    bool quote = true;
+    switch ( attribute.type() )
+    {
+      case QVariant::Int:
+      case QVariant::Double:
+      case QVariant::LongLong:
+        valueString = attribute.toString();
+        quote = false;
+        break;
+        // TODO: use rbool according to driver
+      case QVariant::Bool:
+        valueString = attribute.toBool() ? "1" : "0";
+        quote = false;
+        break;
+      case QVariant::Date:
+        valueString = attribute.toDate().toString( Qt::ISODate );
+        break;
+      case QVariant::Time:
+        valueString = attribute.toTime().toString( Qt::ISODate );
+        break;
+      case QVariant::DateTime:
+        valueString = attribute.toDateTime().toString( Qt::ISODate );
+        break;
+      default:
+        valueString = attribute.toString();
+    }
+    valueString.replace( "'", "''" );
+
+    if ( quote )
+    {
+      valueString = "'" + valueString + "'";
+    }
+
+    valuesStringList <<  valueString;
+  }
+  QString sql = QString( "insert into %1 values (%2);" ).arg( tableName ).arg( valuesStringList.join( ", " ) );
+
+  dbString dbstr;
+  db_init_string( &dbstr );
+  db_set_string( &dbstr, sql.toLatin1().data() );
+
+  int result = db_execute_immediate( driver, &dbstr );
+  db_free_string( &dbstr );
+  if ( result != DB_OK )
+  {
+    throw QgsGrass::Exception( QObject::tr( "Cannot insert, statement" ) + ": " + sql
+                               + QObject::tr( "error" ) + ": " + QString::fromLatin1( db_get_error_msg() ) );
+  }
 }
 
 // GRASS version constants have been changed on 26.4.2007

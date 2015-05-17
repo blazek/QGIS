@@ -108,6 +108,8 @@ void TestQgsGrassProvider::initTestCase()
   mReport += QString( "<h1>GRASS %1 provider tests</h1>\n" ).arg( GRASS_BUILD_VERSION );
   mReport += "<p>" + mySettings + "</p>\n";
 
+  reportRow( "LD_LIBRARY_PATH: " + QString( getenv( "LD_LIBRARY_PATH" ) ) );
+
   QgsGrass::init();
 
   //create some objects that will be used in all tests...
@@ -533,7 +535,7 @@ void TestQgsGrassProvider::vectorImport()
   }
 
   QStringList files;
-  files << "points.shp" << "multipoint.shp" << "lines.shp" << "polys.shp" << "polys_overlapping.shp";
+  files << "points.shp"; //<< "multipoint.shp" << "lines.shp" << "polys.shp" << "polys_overlapping.shp";
 
   QgsCoordinateReferenceSystem mapsetCrs = QgsGrass::crsDirect( mGisdbase, mLocation );
   foreach ( QString file, files )
