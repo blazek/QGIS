@@ -34,12 +34,6 @@ extern "C"
 #else
 #include <grass/vector.h>
 #endif
-
-//#include <grass/gprojects.h>
-
-//#ifdef _MSC_VER
-//#include <float.h>
-//#endif
 }
 
 #include <QByteArray>
@@ -47,51 +41,161 @@ extern "C"
 #include <QFile>
 #include <QIODevice>
 
+#include "qgsfeature.h"
+#include "qgsgeometry.h"
 #include "qgsrectangle.h"
 #include "qgsrasterblock.h"
 #include "qgsgrass.h"
 
+static struct line_pnts *line = Vect_new_line_struct();
+
+//void writePoint( struct line_pnts *line, QgsPoint point )
+void writePoint( struct Map_info* map, QgsPoint point, struct line_cats *cats )
+{
+  Vect_reset_line( line );
+  Vect_append_point( line, point.x(), point.y(), 0 );
+  Vect_write_line( map, GV_POINT, line, cats );
+}
+
+void writePolyline( struct Map_info* map, int type, QgsPolyline polyline, struct line_cats *cats )
+{
+  Vect_reset_line( line );
+  foreach ( QgsPoint point, polyline )
+  {
+    Vect_append_point( line, point.x(), point.y(), 0 );
+  }
+  Vect_write_line( map, type, line, cats );
+}
+
+
 int main( int argc, char **argv )
 {
-  char *name;
-  struct GModule *module;
-  struct Option *map;
- // struct Cell_head window;
-  int cf;
+  struct Option *mapOption;
 
   G_gisinit( argv[0] );
-
-  module = G_define_module();
-
-  map = G_define_standard_option( G_OPT_V_OUTPUT );
+  G_define_module();
+  mapOption = G_define_standard_option( G_OPT_V_OUTPUT );
 
   if ( G_parser( argc, argv ) )
     exit( EXIT_FAILURE );
 
-  struct Map_info Map, Tmp;
-  Vect_open_new(&Map, map->answer, 0);
+  struct Map_info map, tmpMap;
+  Vect_open_new( &map, mapOption->answer, 0 );
   QDateTime now = QDateTime::currentDateTime();
-  QString tmpName = QString("%1_tmp_%2").arg(map->answer).arg(now.toString("yyyyMMddhhmmss"));
-  Vect_open_new(&Tmp, tmpName.toUtf8().data(), 0);
+  QString tmpName = QString( "%1_tmp_%2" ).arg( mapOption->answer ).arg( now.toString( "yyyyMMddhhmmss" ) );
+  Vect_open_new( &tmpMap, tmpName.toUtf8().data(), 0 );
 
   QFile stdinFile;
-  stdinFile.open(0, QIODevice::ReadOnly);
+  stdinFile.open( 0, QIODevice::ReadOnly );
+  QDataStream stdinStream( &stdinFile );
 
-  QDataStream stdinStream(&stdinFile);
+  QFile stdoutFile;
+  stdoutFile.open( 0, QIODevice::ReadOnly );
+  QDataStream stdoutStream( &stdoutFile );
 
   //QgsRectangle extent;
   qint32 typeQint32;
   stdinStream >> typeQint32;
-  QGis::WkbType wkbType = (QGis::WkbType)typeQint32;
+  QGis::WkbType wkbType = ( QGis::WkbType )typeQint32;
+  QGis::WkbType wkbFlatType = QGis::flatType( wkbType );
+  int type = 0;
+  switch ( QGis::singleType( wkbFlatType ) )
+  {
+    case QGis::WKBPoint:
+      type = GV_POINT;
+      break;
+    case QGis::WKBLineString:
+      type = GV_LINE;
+      break;
+    case QGis::WKBPolygon:
+      type = GV_BOUNDARY;
+      break;
+    default:
+      type = QGis::WKBUnknown;
+  }
 
+  QgsFeature feature;
+  //struct line_pnts *line = Vect_new_line_struct();
+  struct line_cats *cats = Vect_new_cats_struct();
+
+  qint32 featureCount = 0;
+  while ( true )
+  {
+    stdinStream >> feature;
+    if ( !feature.isValid() )
+    {
+      break;
+    }
+    Vect_reset_cats( cats );
+
+    QgsGeometry* geometry = feature.geometry();
+    if ( geometry )
+    {
+      if ( wkbFlatType == QGis::WKBPoint )
+      {
+        QgsPoint point = geometry->asPoint();
+        writePoint( &map, point, cats );
+      }
+      else if ( wkbFlatType == QGis::WKBMultiPoint )
+      {
+        QgsMultiPoint multiPoint = geometry->asMultiPoint();
+        foreach ( QgsPoint point, multiPoint )
+        {
+          writePoint( &map, point, cats );
+        }
+      }
+      else if ( wkbFlatType == QGis::WKBLineString )
+      {
+        QgsPolyline polyline = geometry->asPolyline();
+        writePolyline( &map, GV_LINE, polyline, cats );
+      }
+      else if ( wkbFlatType == QGis::WKBMultiLineString )
+      {
+        QgsMultiPolyline multiPolyline = geometry->asMultiPolyline();
+        foreach ( QgsPolyline polyline, multiPolyline )
+        {
+          writePolyline( &map, GV_LINE, polyline, cats );
+        }
+      }
+      else if ( wkbFlatType == QGis::WKBPolygon )
+      {
+        QgsPolygon polygon = geometry->asPolygon();
+        foreach ( QgsPolyline polyline, polygon )
+        {
+          writePolyline( &map, GV_BOUNDARY, polyline, cats );
+        }
+      }
+      else if ( wkbFlatType == QGis::WKBMultiPolygon )
+      {
+        QgsMultiPolygon multiPolygon = geometry->asMultiPolygon();
+        foreach ( QgsPolygon polygon, multiPolygon )
+        {
+          foreach ( QgsPolyline polyline, polygon )
+          {
+            writePolyline( &map, GV_BOUNDARY, polyline, cats );
+          }
+        }
+      }
+      else
+      {
+        G_fatal_error( "Geometry type not supported" );
+      }
+
+
+
+    }
+    featureCount++;
+  }
   //G_fatal_error("wkbType = %d", wkbType);
+  //G_fatal_error("count = %d", count);
+  stdoutStream << featureCount;
 
-  Vect_copy_map_lines(&Tmp, &Map);
-  Vect_close(&Tmp);
-  Vect_delete(tmpName.toUtf8().data());
+  Vect_copy_map_lines( &tmpMap, &map );
+  Vect_close( &tmpMap );
+  Vect_delete( tmpName.toUtf8().data() );
 
-  Vect_build(&Map);
-  Vect_close(&Map);
+  Vect_build( &map );
+  Vect_close( &map );
 
   // TODO history
 

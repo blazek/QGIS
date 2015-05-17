@@ -16,6 +16,8 @@
 #include <QByteArray>
 #include <QtConcurrentRun>
 
+#include "qgsfeature.h"
+#include "qgsfeatureiterator.h"
 #include "qgsproviderregistry.h"
 #include "qgsrasterdataprovider.h"
 #include "qgsrasteriterator.h"
@@ -198,6 +200,8 @@ bool QgsGrassRasterImport::import()
       delete block;
     }
 
+    // TODO: send something back from module and read it here to close map correctly in module
+
     process->closeWriteChannel();
     process->waitForFinished( 5000 );
 
@@ -343,10 +347,30 @@ bool QgsGrassVectorImport::import()
 
   QDataStream outStream( process );
 
-  outStream <<  ( qint32 )mProvider->geometryType();
+  outStream << ( qint32 )mProvider->geometryType();
+
+  QgsFeatureIterator iterator = mProvider->getFeatures();
+  QgsFeature feature;
+  while ( iterator.nextFeature( feature ) )
+  {
+    if ( !feature.isValid() )
+    {
+      continue;
+    }
+    outStream << feature;
+  }
+  feature = QgsFeature(); // indicate end by invalid feature
+  outStream << feature;
+
+  process->setReadChannel( QProcess::StandardOutput );
+  qint32 featureCount;
+  outStream >> featureCount;
+  QgsDebugMsg( QString( "featureCount = %1" ).arg( featureCount ) );
+
 
   process->closeWriteChannel();
-  process->waitForFinished( 5000 );
+  //process->waitForFinished( 5000 );
+  process->waitForFinished( 1000 );
 
   QString stdoutString = process->readAllStandardOutput().data();
   QString stderrString = process->readAllStandardError().data();

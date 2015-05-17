@@ -74,7 +74,7 @@ class TestQgsGrassProvider: public QObject
     bool compare( QStringList expected, QStringList got, bool& ok );
     // compare with tolerance
     bool compare( double expected, double got, bool& ok );
-    bool createTmpLocation(QString& tmpGisdbase, QString& tmpLocation, QString& tmpMapset);
+    bool createTmpLocation( QString& tmpGisdbase, QString& tmpLocation, QString& tmpMapset );
     QString mGisdbase;
     QString mLocation;
     QString mReport;
@@ -410,7 +410,7 @@ void TestQgsGrassProvider::info()
 }
 
 // create temporary output location
-bool TestQgsGrassProvider::createTmpLocation(QString& tmpGisdbase, QString& tmpLocation, QString& tmpMapset)
+bool TestQgsGrassProvider::createTmpLocation( QString& tmpGisdbase, QString& tmpLocation, QString& tmpMapset )
 {
   // use QTemporaryFile to generate name (QTemporaryDir since 5.0)
   QTemporaryFile* tmpFile = new QTemporaryFile( QDir::tempPath() + "/qgis-grass-test" );
@@ -453,7 +453,7 @@ void TestQgsGrassProvider::rasterImport()
   QString tmpLocation;
   QString tmpMapset;
 
-  if ( !createTmpLocation(tmpGisdbase, tmpLocation, tmpMapset) )
+  if ( !createTmpLocation( tmpGisdbase, tmpLocation, tmpMapset ) )
   {
     reportRow( "cannot create temporary location" );
     verify( false );
@@ -525,7 +525,7 @@ void TestQgsGrassProvider::vectorImport()
   QString tmpLocation;
   QString tmpMapset;
 
-  if ( !createTmpLocation(tmpGisdbase, tmpLocation, tmpMapset) )
+  if ( !createTmpLocation( tmpGisdbase, tmpLocation, tmpMapset ) )
   {
     reportRow( "cannot create temporary location" );
     verify( false );
@@ -533,7 +533,7 @@ void TestQgsGrassProvider::vectorImport()
   }
 
   QStringList files;
-  files << "points.shp";
+  files << "points.shp" << "multipoint.shp" << "lines.shp" << "polys.shp" << "polys_overlapping.shp";
 
   QgsCoordinateReferenceSystem mapsetCrs = QgsGrass::crsDirect( mGisdbase, mLocation );
   foreach ( QString file, files )
@@ -556,13 +556,16 @@ void TestQgsGrassProvider::vectorImport()
     }
 
     QgsGrassObject vectorObject( tmpGisdbase, tmpLocation, tmpMapset, name, QgsGrassObject::Vector );
-    QgsGrassVectorImport *import = new QgsGrassVectorImport(provider, vectorObject);
+    QgsGrassVectorImport *import = new QgsGrassVectorImport( provider, vectorObject );
     if ( !import->import() )
     {
       reportRow( "import failed: " +  import->error() );
       ok = false;
     }
     delete import;
+
+    QStringList layers = QgsGrass::vectorLayers( tmpGisdbase, tmpLocation, tmpMapset, name );
+    reportRow( "created layers: " + layers.join( "," ) );
   }
   verify( ok );
 }
