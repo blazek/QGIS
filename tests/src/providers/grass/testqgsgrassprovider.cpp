@@ -535,8 +535,8 @@ void TestQgsGrassProvider::vectorImport()
   }
 
   QStringList files;
-  //files << "points.shp" << "multipoint.shp" << "lines.shp" << "polys.shp" << "polys_overlapping.shp";
-  files << "polys_overlapping.shp";
+  files << "points.shp" << "multipoint.shp" << "lines.shp" << "polys.shp";
+  files << "polys_overlapping.shp" << "bug5598.shp";
 
   QgsCoordinateReferenceSystem mapsetCrs = QgsGrass::crsDirect( mGisdbase, mLocation );
   foreach ( QString file, files )

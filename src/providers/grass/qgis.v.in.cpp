@@ -26,7 +26,6 @@ extern "C"
 #endif
 #include <grass/version.h>
 #include <grass/gis.h>
-//#include <grass/config.h>
 #include <grass/dbmi.h>
 
 #if GRASS_VERSION_MAJOR < 7
@@ -50,7 +49,6 @@ extern "C"
 
 static struct line_pnts *line = Vect_new_line_struct();
 
-//void writePoint( struct line_pnts *line, QgsPoint point )
 void writePoint( struct Map_info* map, int type, QgsPoint point, struct line_cats *cats )
 {
   Vect_reset_line( line );
@@ -67,7 +65,6 @@ void writePolyline( struct Map_info* map, int type, QgsPolyline polyline, struct
   }
   Vect_write_line( map, type, line, cats );
 }
-
 
 int main( int argc, char **argv )
 {
@@ -156,7 +153,6 @@ int main( int argc, char **argv )
     {
       break;
     }
-
 
     QgsGeometry* geometry = feature.geometry();
     if ( geometry )

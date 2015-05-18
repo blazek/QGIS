@@ -13,11 +13,16 @@
  *   (at your option) any later version.                                   *
  *                                                                         *
  ***************************************************************************/
+#include <unistd.h>
+
 #include <QByteArray>
 #include <QtConcurrentRun>
 
+#include "qgscoordinatereferencesystem.h"
+#include "qgscoordinatetransform.h"
 #include "qgsfeature.h"
 #include "qgsfeatureiterator.h"
+#include "qgsgeometry.h"
 #include "qgsproviderregistry.h"
 #include "qgsrasterdataprovider.h"
 #include "qgsrasteriterator.h"
@@ -313,6 +318,7 @@ bool QgsGrassVectorImport::run( QgsGrassVectorImport *imp )
 
 bool QgsGrassVectorImport::import()
 {
+
   QgsDebugMsg( "entered" );
 
   if ( !mProvider )
@@ -327,7 +333,18 @@ bool QgsGrassVectorImport::import()
     return false;
   }
 
-  //QgsDebugMsg( QString( "data_type = %1" ).arg( data_type ) );
+  QgsCoordinateReferenceSystem providerCrs = mProvider->crs();
+  QgsCoordinateReferenceSystem mapsetCrs = QgsGrass::crsDirect( mGrassObject.gisdbase(), mGrassObject.location() );
+  QgsDebugMsg( "providerCrs = " + providerCrs.toWkt() );
+  QgsDebugMsg( "mapsetCrs = " + mapsetCrs.toWkt() );
+  QgsCoordinateTransform coordinateTransform;
+  bool doTransform = false;
+  if ( providerCrs.isValid() && mapsetCrs.isValid() && providerCrs != mapsetCrs )
+  {
+    coordinateTransform.setSourceCrs( providerCrs );
+    coordinateTransform.setDestCRS( mapsetCrs );
+    doTransform = true;
+  }
 
   QString module = QgsGrass::qgisGrassModulePath() + "/qgis.v.in";
   QStringList arguments;
@@ -369,6 +386,10 @@ bool QgsGrassVectorImport::import()
       {
         continue;
       }
+      if ( doTransform && feature.geometry() )
+      {
+        feature.geometry()->transform( coordinateTransform );
+      }
       outStream << feature;
     }
     feature = QgsFeature(); // indicate end by invalid feature
@@ -384,8 +405,7 @@ bool QgsGrassVectorImport::import()
   QgsDebugMsg( QString( "result = %1" ).arg( result ) );
 
   process->closeWriteChannel();
-  //process->waitForFinished( 5000 );
-  process->waitForFinished( 1000 );
+  process->waitForFinished( 5000 );
 
   QString stdoutString = process->readAllStandardOutput().data();
   QString stderrString = process->readAllStandardError().data();

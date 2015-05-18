@@ -1108,7 +1108,7 @@ bool GRASS_LIB_EXPORT QgsGrass::objectExists( const QgsGrassObject& grassObject 
   if ( grassObject.type() == QgsGrassObject::Raster )
     path += "/cellhd";
   else if ( grassObject.type() == QgsGrassObject::Vector )
-    path += "/vect";
+    path += "/vector";
   else if ( grassObject.type() == QgsGrassObject::Region )
     path += "/windows";
 

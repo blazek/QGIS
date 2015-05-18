@@ -32,6 +32,7 @@ class QgsGrassImport : public QObject
     QgsGrassImport( QgsGrassObject grassObject );
     virtual ~QgsGrassImport() {}
     QgsGrassObject grassObject() const { return mGrassObject; }
+    virtual void importInThread() = 0;
     virtual QString uri() const = 0;
     // get error if import failed
     QString error();
@@ -53,10 +54,10 @@ class QgsGrassRasterImport : public QgsGrassImport
   public:
     // takes pipe ownership
     QgsGrassRasterImport( QgsRasterPipe* pipe, const QgsGrassObject& grassObject,
-                          const QgsRectangle &extent, int xSize, int ySize);
+                          const QgsRectangle &extent, int xSize, int ySize );
     ~QgsGrassRasterImport();
     bool import();
-    void importInThread();
+    void importInThread() override;
     QString uri() const override;
     // get list of extensions (for bands)
     static QStringList extensions( QgsRasterDataProvider* provider );
@@ -81,7 +82,7 @@ class QgsGrassVectorImport : public QgsGrassImport
     QgsGrassVectorImport( QgsVectorDataProvider* provider, const QgsGrassObject& grassObject );
     ~QgsGrassVectorImport();
     bool import();
-    void importInThread();
+    void importInThread() override;
     QString uri() const override;
     // get list of all output names
     QStringList names() const override;
