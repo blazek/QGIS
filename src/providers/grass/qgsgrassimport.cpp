@@ -347,28 +347,41 @@ bool QgsGrassVectorImport::import()
 
   QDataStream outStream( process );
 
-  outStream << ( qint32 )mProvider->geometryType();
+  QGis::WkbType wkbType = mProvider->geometryType();
+  bool isPolygon = QGis::singleType( QGis::flatType( wkbType ) ) == QGis::WKBPolygon;
+  outStream << ( qint32 )wkbType;
 
   outStream << mProvider->fields();
 
   QgsFeatureIterator iterator = mProvider->getFeatures();
   QgsFeature feature;
-  while ( iterator.nextFeature( feature ) )
+  for ( int i = 0; i < ( isPolygon ? 2 : 1 ); i++ ) // two cycles with polygons
   {
-    if ( !feature.isValid() )
+    if ( i > 0 )
     {
-      continue;
+      //iterator.rewind(); // rewind does not work
+      iterator = mProvider->getFeatures();
     }
+    QgsDebugMsg( "send features" );
+    while ( iterator.nextFeature( feature ) )
+    {
+      if ( !feature.isValid() )
+      {
+        continue;
+      }
+      outStream << feature;
+    }
+    feature = QgsFeature(); // indicate end by invalid feature
     outStream << feature;
+    QgsDebugMsg( "features sent" );
   }
-  feature = QgsFeature(); // indicate end by invalid feature
-  outStream << feature;
+  iterator.close();
 
   process->setReadChannel( QProcess::StandardOutput );
-  qint32 featureCount;
-  outStream >> featureCount;
-  QgsDebugMsg( QString( "featureCount = %1" ).arg( featureCount ) );
 
+  bool result;
+  outStream >> result;
+  QgsDebugMsg( QString( "result = %1" ).arg( result ) );
 
   process->closeWriteChannel();
   //process->waitForFinished( 5000 );

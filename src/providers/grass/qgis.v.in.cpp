@@ -45,16 +45,17 @@ extern "C"
 #include "qgsgeometry.h"
 #include "qgsrectangle.h"
 #include "qgsrasterblock.h"
+#include "qgsspatialindex.h"
 #include "qgsgrass.h"
 
 static struct line_pnts *line = Vect_new_line_struct();
 
 //void writePoint( struct line_pnts *line, QgsPoint point )
-void writePoint( struct Map_info* map, QgsPoint point, struct line_cats *cats )
+void writePoint( struct Map_info* map, int type, QgsPoint point, struct line_cats *cats )
 {
   Vect_reset_line( line );
   Vect_append_point( line, point.x(), point.y(), 0 );
-  Vect_write_line( map, GV_POINT, line, cats );
+  Vect_write_line( map, type, line, cats );
 }
 
 void writePolyline( struct Map_info* map, int type, QgsPolyline polyline, struct line_cats *cats )
@@ -79,12 +80,6 @@ int main( int argc, char **argv )
   if ( G_parser( argc, argv ) )
     exit( EXIT_FAILURE );
 
-  struct Map_info map, tmpMap;
-  Vect_open_new( &map, mapOption->answer, 0 );
-  QDateTime now = QDateTime::currentDateTime();
-  QString tmpName = QString( "%1_tmp_%2" ).arg( mapOption->answer ).arg( now.toString( "yyyyMMddhhmmss" ) );
-  Vect_open_new( &tmpMap, tmpName.toUtf8().data(), 0 );
-
   QFile stdinFile;
   stdinFile.open( 0, QIODevice::ReadOnly );
   QDataStream stdinStream( &stdinFile );
@@ -93,28 +88,22 @@ int main( int argc, char **argv )
   stdoutFile.open( 0, QIODevice::ReadOnly );
   QDataStream stdoutStream( &stdoutFile );
 
-  //QgsRectangle extent;
   qint32 typeQint32;
   stdinStream >> typeQint32;
   QGis::WkbType wkbType = ( QGis::WkbType )typeQint32;
   QGis::WkbType wkbFlatType = QGis::flatType( wkbType );
-#if 0
-  int type = 0;
-  switch ( QGis::singleType( wkbFlatType ) )
+  bool isPolygon = QGis::singleType( wkbFlatType ) == QGis::WKBPolygon;
+
+  struct Map_info finalMap, tmpMap;
+  Vect_open_new( &finalMap, mapOption->answer, 0 );
+  struct Map_info * map = &finalMap;
+  QDateTime now = QDateTime::currentDateTime();
+  QString tmpName = QString( "%1_tmp_%2" ).arg( mapOption->answer ).arg( now.toString( "yyyyMMddhhmmss" ) );
+  if ( isPolygon )
   {
-    case QGis::WKBPoint:
-      type = GV_POINT;
-      break;
-    case QGis::WKBLineString:
-      type = GV_LINE;
-      break;
-    case QGis::WKBPolygon:
-      type = GV_BOUNDARY;
-      break;
-    default:
-      type = QGis::WKBUnknown;
+    Vect_open_new( &tmpMap, tmpName.toUtf8().data(), 0 );
+    map = &tmpMap;
   }
-#endif
 
   QgsFields srcFields;
   stdinStream >> srcFields;
@@ -135,8 +124,8 @@ int main( int argc, char **argv )
   fields.append( QgsField( key, QVariant::Int ) );
   fields.extend( srcFields );
 
-  struct field_info *fieldInfo = Vect_default_field_info( &map, 1, NULL, GV_1TABLE );
-  if ( Vect_map_add_dblink( &map, 1, NULL, fieldInfo->table, key.toLatin1().data(),
+  struct field_info *fieldInfo = Vect_default_field_info( &finalMap, 1, NULL, GV_1TABLE );
+  if ( Vect_map_add_dblink( &finalMap, 1, NULL, fieldInfo->table, key.toLatin1().data(),
                             fieldInfo->database, fieldInfo->driver ) != 0 )
   {
     G_fatal_error( "Cannot add link" );
@@ -157,7 +146,6 @@ int main( int argc, char **argv )
   }
 
   QgsFeature feature;
-  //struct line_pnts *line = Vect_new_line_struct();
   struct line_cats *cats = Vect_new_cats_struct();
 
   qint32 featureCount = 0;
@@ -168,54 +156,61 @@ int main( int argc, char **argv )
     {
       break;
     }
-    Vect_reset_cats( cats );
-    Vect_cat_set( cats, 1, ( int )feature.id() );
+
 
     QgsGeometry* geometry = feature.geometry();
     if ( geometry )
     {
-      if ( wkbFlatType == QGis::WKBPoint )
+      // geometry type may be probably different from provider type (e.g. multi x single)
+      QGis::WkbType geometryType = QGis::flatType( geometry->wkbType() );
+      if ( !isPolygon )
+      {
+        Vect_reset_cats( cats );
+        Vect_cat_set( cats, 1, ( int )feature.id() );
+      }
+
+      if ( geometryType == QGis::WKBPoint )
       {
         QgsPoint point = geometry->asPoint();
-        writePoint( &map, point, cats );
+        writePoint( map, GV_POINT, point, cats );
       }
-      else if ( wkbFlatType == QGis::WKBMultiPoint )
+      else if ( geometryType == QGis::WKBMultiPoint )
       {
         QgsMultiPoint multiPoint = geometry->asMultiPoint();
         foreach ( QgsPoint point, multiPoint )
         {
-          writePoint( &map, point, cats );
+          writePoint( map, GV_POINT, point, cats );
         }
       }
-      else if ( wkbFlatType == QGis::WKBLineString )
+      else if ( geometryType == QGis::WKBLineString )
       {
         QgsPolyline polyline = geometry->asPolyline();
-        writePolyline( &map, GV_LINE, polyline, cats );
+        writePolyline( map, GV_LINE, polyline, cats );
       }
-      else if ( wkbFlatType == QGis::WKBMultiLineString )
+      else if ( geometryType == QGis::WKBMultiLineString )
       {
         QgsMultiPolyline multiPolyline = geometry->asMultiPolyline();
         foreach ( QgsPolyline polyline, multiPolyline )
         {
-          writePolyline( &map, GV_LINE, polyline, cats );
+          writePolyline( map, GV_LINE, polyline, cats );
         }
       }
-      else if ( wkbFlatType == QGis::WKBPolygon )
+      else if ( geometryType == QGis::WKBPolygon )
       {
         QgsPolygon polygon = geometry->asPolygon();
         foreach ( QgsPolyline polyline, polygon )
         {
-          writePolyline( &map, GV_BOUNDARY, polyline, cats );
+          writePolyline( map, GV_BOUNDARY, polyline, cats );
         }
       }
-      else if ( wkbFlatType == QGis::WKBMultiPolygon )
+      else if ( geometryType == QGis::WKBMultiPolygon )
       {
         QgsMultiPolygon multiPolygon = geometry->asMultiPolygon();
         foreach ( QgsPolygon polygon, multiPolygon )
         {
           foreach ( QgsPolyline polyline, polygon )
           {
-            writePolyline( &map, GV_BOUNDARY, polyline, cats );
+            writePolyline( map, GV_BOUNDARY, polyline, cats );
           }
         }
       }
@@ -237,16 +232,103 @@ int main( int argc, char **argv )
     }
     featureCount++;
   }
+
+  if ( isPolygon )
+  {
+    double snapTreshold = 0;
+    Vect_build_partial( map, GV_BUILD_BASE );
+
+    if ( snapTreshold > 0 )
+    {
+      Vect_snap_lines( map, GV_BOUNDARY, snapTreshold, NULL );
+    }
+    Vect_break_polygons( map, GV_BOUNDARY, NULL );
+    Vect_remove_duplicates( map, GV_BOUNDARY | GV_CENTROID, NULL );
+    while ( true )
+    {
+      Vect_break_lines( map, GV_BOUNDARY, NULL );
+      Vect_remove_duplicates( map, GV_BOUNDARY, NULL );
+      if ( Vect_clean_small_angles_at_nodes( map, GV_BOUNDARY, NULL ) == 0 )
+      {
+        break;
+      }
+    }
+    Vect_merge_lines( map, GV_BOUNDARY, NULL, NULL );
+#if GRASS_VERSION_MAJOR < 7
+    Vect_remove_bridges( map, NULL );
+#else
+    int linesRemoved, bridgesRemoved;
+    Vect_remove_bridges( map, NULL, &linesRemoved, &bridgesRemoved );
+#endif
+    Vect_build_partial( map, GV_BUILD_ATTACH_ISLES );
+
+    QMap<QgsFeatureId, QgsFeature> centroids;
+    QgsSpatialIndex spatialIndex;
+    int nAreas = Vect_get_num_areas( map );
+    for ( int area = 1; area <= nAreas; area++ )
+    {
+      double x, y;
+      if ( Vect_get_point_in_area( map, area, &x, &y ) < 0 )
+      {
+        // TODO: send warning
+        continue;
+      }
+      QgsPoint point( x, y );
+      QgsFeature feature( area );
+      feature.setGeometry( QgsGeometry::fromPoint( point ) );
+      feature.setValid( true );
+      centroids.insert( area, feature );
+      spatialIndex.insertFeature( feature );
+    }
+    // read once more to assign centroids to polygons
+    while ( true )
+    {
+      stdinStream >> feature;
+      if ( !feature.isValid() )
+      {
+        break;
+      }
+      if ( !feature.geometry() )
+      {
+        continue;
+      }
+
+      QList<QgsFeatureId> idList = spatialIndex.intersects( feature.geometry()->boundingBox() );
+      foreach ( QgsFeatureId id, idList )
+      {
+        QgsFeature& centroid = centroids[id];
+        if ( feature.geometry()->contains( centroid.geometry() ) )
+        {
+          centroid.attributes().append( feature.id() );
+        }
+      }
+    }
+
+    Vect_copy_map_lines( &tmpMap, &finalMap );
+    Vect_close( &tmpMap );
+    Vect_delete( tmpName.toUtf8().data() );
+
+    foreach ( QgsFeature centroid, centroids.values() )
+    {
+      QgsPoint point = centroid.geometry()->asPoint();
+
+      if ( centroid.attributes().size() > 0 )
+      {
+        Vect_reset_cats( cats );
+        foreach ( QVariant attribute, centroid.attributes() )
+        {
+          Vect_cat_set( cats, 1, attribute.toInt() );
+        }
+        writePoint( &finalMap, GV_CENTROID, point, cats );
+      }
+    }
+  }
+
   db_close_database_shutdown_driver( driver );
-  stdoutStream << featureCount;
+  Vect_build( &finalMap );
+  Vect_close( &finalMap );
 
-  Vect_copy_map_lines( &tmpMap, &map );
-  Vect_close( &tmpMap );
-  Vect_delete( tmpName.toUtf8().data() );
-
-  Vect_build( &map );
-  Vect_close( &map );
-
+  stdoutStream << ( bool )true; // to keep caller waiting until finished
   // TODO history
 
   exit( EXIT_SUCCESS );

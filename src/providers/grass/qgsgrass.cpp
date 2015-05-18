@@ -1819,6 +1819,7 @@ void QgsGrass::createTable( dbDriver *driver, const QString tableName, const Qgs
       case QVariant::Double:
         typeName = "double precision";
         break;
+        // TODO: verify how is it with spatialite/dbf support for date, time, datetime, v.in.ogr is using all
       case QVariant::Date:
         typeName = "date";
         break;
