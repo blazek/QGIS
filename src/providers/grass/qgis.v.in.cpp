@@ -130,7 +130,8 @@ int main( int argc, char **argv )
   Vect_open_new( finalMap, mapOption->answer, 0 );
   struct Map_info * map = finalMap;
   QDateTime now = QDateTime::currentDateTime();
-  QString tmpName = QString( "%1_tmp_%2" ).arg( mapOption->answer ).arg( now.toString( "yyyyMMddhhmmss" ) );
+  // keep tmp name in sync with QgsGrassMapsetItem::createChildren
+  QString tmpName = QString( "qgis_import_tmp_%1_%2" ).arg( mapOption->answer ).arg( now.toString( "yyyyMMddhhmmss" ) );
   if ( isPolygon )
   {
     Vect_open_new( tmpMap, tmpName.toUtf8().data(), 0 );
