@@ -35,12 +35,29 @@ extern "C"
 #include <grass/imagery.h>
 }
 
+//------------------------------ QgsGrassImport ------------------------------------
+QgsGrassImportIcon *QgsGrassImportIcon::instance()
+{
+  static QgsGrassImportIcon* sInstance = new QgsGrassImportIcon();
+  return sInstance;
+}
+
+QgsGrassImportIcon::QgsGrassImportIcon()
+  : QgsAnimatedIcon( QgsApplication::iconPath( "/mIconImport.gif" ) )
+{
+}
+
+//------------------------------ QgsGrassImport ------------------------------------
 QgsGrassImport::QgsGrassImport( QgsGrassObject grassObject )
     : QObject()
     , mGrassObject( grassObject )
     , mCanceled( false )
     , mFutureWatcher( 0 )
 {
+  // QMovie used by QgsAnimatedIcon is using QTimer which cannot be start from another thread
+  // (it works on Linux however) so we cannot start it connecting from QgsGrassImportItem and 
+  // connect it also here (QgsGrassImport is constructed on the main thread) to a slot doing nothing.
+  QgsGrassImportIcon::instance()->connectFrameChanged( this, SLOT( frameChanged() ) );
 }
 
 QgsGrassImport::~QgsGrassImport()
@@ -50,6 +67,7 @@ QgsGrassImport::~QgsGrassImport()
     QgsDebugMsg( "mFutureWatcher not finished -> waitForFinished()" );
     mFutureWatcher->waitForFinished();
   }
+  QgsGrassImportIcon::instance()->disconnectFrameChanged( this, SLOT( frameChanged() ) );
 }
 
 void QgsGrassImport::setError( QString error )
