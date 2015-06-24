@@ -29,10 +29,9 @@
  */
 class GRASS_LIB_EXPORT QgsGrassDataFile : public QFile
 {
-    Q_OBJECT
   public:
     explicit QgsGrassDataFile(QObject *parent = 0);
-
+	virtual ~QgsGrassDataFile() {};
     // Block until all data are read
     virtual qint64 readData(char * data, qint64 len) override;
 };

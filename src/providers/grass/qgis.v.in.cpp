@@ -130,8 +130,6 @@ int main( int argc, char **argv )
 #ifdef Q_OS_WIN32
   _setmode( _fileno( stdin ), _O_BINARY );
   _setmode( _fileno( stdout ), _O_BINARY );
-  setvbuf( stdin, NULL, _IONBF, BUFSIZ );
-  setvbuf( stdout, NULL, _IONBF, BUFSIZ );
 #endif
   //QFile stdinFile;
   QgsGrassDataFile stdinFile;

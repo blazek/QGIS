@@ -23,7 +23,6 @@ MACRO(ADD_GRASSLIB GRASS_BUILD_VERSION)
     SET(GRASS_MINOR_VERSION ${GRASS_MINOR_VERSION${GRASS_BUILD_VERSION}})
 
     QT4_WRAP_CPP(GRASS_LIBRARY_MOC_SRCS 
-      ../qgsgrassdatafile.h 
       ../qgsgrassprovider.h 
       ../qgsgrassimport.h
       ../qgsgrassoptions.h
