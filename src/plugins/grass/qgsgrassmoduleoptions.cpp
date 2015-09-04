@@ -32,7 +32,9 @@
 
 #include "qgsgrass.h"
 #include "qgsgrassmodule.h"
+#include "qgsgrassmoduleinput.h"
 #include "qgsgrassmoduleoptions.h"
+#include "qgsgrassmoduleparam.h"
 #include "qgsgrassplugin.h"
 
 extern "C"
@@ -882,7 +884,7 @@ bool QgsGrassModuleStandardOptions::inputRegion( struct Cell_head *window, QgsCo
       }
 
       // TODO: best way to set resolution ?
-      if ( item->type() == QgsGrassModuleInput::Raster
+      if ( item->type() == QgsGrassObject::Raster
            && rasterCount == 0 )
       {
         QgsGrass::copyRegionResolution( &mapWindow, window );
@@ -896,9 +898,9 @@ bool QgsGrassModuleStandardOptions::inputRegion( struct Cell_head *window, QgsCo
         QgsGrass::extendRegion( &mapWindow, window );
       }
 
-      if ( item->type() == QgsGrassModuleInput::Raster )
+      if ( item->type() == QgsGrassObject::Raster )
         rasterCount++;
-      else if ( item->type() == QgsGrassModuleInput::Vector )
+      else if ( item->type() == QgsGrassObject::Vector )
         vectorCount++;
     }
 
@@ -960,22 +962,6 @@ bool QgsGrassModuleStandardOptions::getCurrentMapRegion( QgsGrassModuleInput* in
     return false;
   }
 
-  QgsGrassObject::Type mapType;
-
-  switch ( input->type() )
-  {
-    case QgsGrassModuleInput::Raster :
-      mapType = QgsGrassObject::Raster;
-      break;
-    case QgsGrassModuleInput::Vector :
-      mapType = QgsGrassObject::Vector;
-      break;
-    default:
-      // should not happen
-      QgsGrass::warning( "getCurrentMapRegion mapType not supported" );
-      return false;
-  }
-
   QStringList mm = input->currentMap().split( "@" );
   QString map = mm.value( 0 );
   QString mapset = QgsGrass::getDefaultMapset();
@@ -983,7 +969,7 @@ bool QgsGrassModuleStandardOptions::getCurrentMapRegion( QgsGrassModuleInput* in
   {
     mapset = mm.value( 1 );
   }
-  if ( !QgsGrass::mapRegion( mapType,
+  if ( !QgsGrass::mapRegion( input->type(),
                              QgsGrass::getDefaultGisdbase(),
                              QgsGrass::getDefaultLocation(), mapset, map,
                              window ) )

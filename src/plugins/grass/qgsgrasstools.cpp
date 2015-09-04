@@ -552,6 +552,12 @@ void QgsGrassTools::mapsetChanged()
   closeTools();
   mRegion->mapsetChanged();
   showTabs();
+
+  // debug
+  if ( QgsGrass::activeMode() )
+  {
+    runModule( "v.to.rast.attr", false );
+  }
 }
 
 QgsGrassTools::~QgsGrassTools()
