@@ -224,7 +224,7 @@ QgsGrassModuleOption::QgsGrassModuleOption( QgsGrassModule *module, QString key,
     , mLayout( 0 )
     , mUsesRegion( false )
 {
-  QgsDebugMsg( "called." );
+  QgsDebugMsg( "entered" );
   setSizePolicy( QSizePolicy::MinimumExpanding, QSizePolicy::Minimum );
 
   if ( mHidden )
@@ -471,7 +471,7 @@ QgsGrassModuleOption::QgsGrassModuleOption( QgsGrassModule *module, QString key,
 
 void QgsGrassModuleOption::addLineEdit()
 {
-  QgsDebugMsg( "called." );
+  QgsDebugMsg( "entered" );
 
   // TODO make the widget growing with new lines. HOW???!!!
   QLineEdit *lineEdit = new QLineEdit( this );
@@ -537,7 +537,7 @@ void QgsGrassModuleOption::addLineEdit()
 void QgsGrassModuleOption::browse( bool checked )
 {
   Q_UNUSED( checked );
-  QgsDebugMsg( "called." );
+  QgsDebugMsg( "entered" );
 
   QSettings settings;
   QString lastDir = settings.value( "/GRASS/lastDirectOutputDir", "" ).toString();
@@ -555,7 +555,7 @@ void QgsGrassModuleOption::browse( bool checked )
 
 void QgsGrassModuleOption::removeLineEdit()
 {
-  QgsDebugMsg( "called." );
+  QgsDebugMsg( "entered" );
 
   if ( mLineEdits.size() < 2 )
     return;
@@ -565,7 +565,7 @@ void QgsGrassModuleOption::removeLineEdit()
 
 QString QgsGrassModuleOption::outputExists()
 {
-  QgsDebugMsg( "called." );
+  QgsDebugMsg( "entered" );
 
   if ( !mIsOutput )
     return QString();
@@ -732,7 +732,7 @@ QgsGrassModuleFlag::QgsGrassModuleFlag( QgsGrassModule *module, QString key,
                                         bool direct, QWidget * parent )
     : QgsGrassModuleCheckBox( "", parent ), QgsGrassModuleParam( module, key, qdesc, gdesc, gnode, direct )
 {
-  QgsDebugMsg( "called." );
+  QgsDebugMsg( "entered" );
 
   if ( mHidden )
     hide();
@@ -870,7 +870,7 @@ QgsGrassModuleGdalInput::QgsGrassModuleGdalInput(
 
 void QgsGrassModuleGdalInput::updateQgisLayers()
 {
-  QgsDebugMsg( "called." );
+  QgsDebugMsg( "entered" );
 
   QString current = mLayerComboBox->currentText();
   mLayerComboBox->clear();
@@ -1048,7 +1048,7 @@ QStringList QgsGrassModuleGdalInput::options()
 
 QString QgsGrassModuleGdalInput::ready()
 {
-  QgsDebugMsg( "called." );
+  QgsDebugMsg( "entered" );
 
   QString error;
 
@@ -1116,7 +1116,7 @@ QgsGrassModuleField::QgsGrassModuleField(
 
 void QgsGrassModuleField::updateFields()
 {
-  QgsDebugMsg( "called." );
+  QgsDebugMsg( "entered" );
 
   QString current = mFieldComboBox->currentText();
   mFieldComboBox->clear();
@@ -1201,13 +1201,15 @@ QgsGrassModuleSelection::QgsGrassModuleSelection(
 
 void QgsGrassModuleSelection::updateSelection()
 {
-  QgsDebugMsg( "called." );
+  QgsDebugMsg( "entered" );
 
   mLineEdit->setText( "" );
   //QgsMapCanvas *canvas = mModule->qgisIface()->mapCanvas();
   if ( mLayerInput == 0 )
     return;
 
+  // TODO update to new input
+#if 0
   QgsMapLayer *layer = mLayerInput->currentLayer();
   if ( !layer )
     return;
@@ -1252,6 +1254,7 @@ void QgsGrassModuleSelection::updateSelection()
   }
 
   mLineEdit->setText( cats );
+#endif
 }
 
 QStringList QgsGrassModuleSelection::options()
@@ -1413,7 +1416,7 @@ QgsGrassModuleFile::~QgsGrassModuleFile()
 QgsGrassModuleCheckBox::QgsGrassModuleCheckBox( const QString & text, QWidget * parent )
     : QCheckBox( text, parent ), mText( text )
 {
-  QgsDebugMsg( "called." );
+  QgsDebugMsg( "entered" );
   adjustText();
 }
 

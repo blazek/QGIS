@@ -16,11 +16,13 @@
 #ifndef QGSGRASSMODULEINPUT_H
 #define QGSGRASSMODULEINPUT_H
 
+#include <QAbstractProxyModel>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QCompleter>
 #include <QFileSystemModel>
 #include <QGroupBox>
-#include <QAbstractProxyModel>
+#include <QMap>
 #include <QSortFilterProxyModel>
 #include <QStandardItem>
 #include <QStandardItemModel>
@@ -33,6 +35,7 @@
 #include "qgsgrassmoduleparam.h"
 #include "qgsgrassplugin.h"
 #include "qgsgrassprovider.h"
+#include "qgsgrassvector.h"
 
 extern "C"
 {
@@ -170,6 +173,7 @@ class QgsGrassModuleInputComboBox : public QComboBox
   protected:
     QgsGrassObject::Type mType;
     QgsGrassModuleInputModel *mModel;
+    QgsGrassModuleInputProxy *mProxy;
     QgsGrassModuleInputTreeView *mTreeView;
     // Skip next hidePopup
     bool mSkipHide;
@@ -203,9 +207,14 @@ class QgsGrassModuleInput : public QgsGrassModuleGroupBoxItem
     QgsFields currentFields();
 
     //! Returns pointer to currently selected layer or null
-    QgsMapLayer *currentLayer();
+
+    QgsGrassObject currentGrassObject();
 
     QString currentMap();
+
+    QgsGrassVectorLayer * currentLayer();
+
+    QStringList currentGeometryTypeNames();
 
     QString ready() override;
 
@@ -223,10 +232,10 @@ class QgsGrassModuleInput : public QgsGrassModuleGroupBoxItem
     QString geometryTypeOption() const { return mGeometryTypeOption; }
 
   public slots:
-    //! Fill combobox with currently available maps in QGIS canvas
-    void updateQgisLayers();
+    //void changed( int );
+    void onChanged( const QString & text );
 
-    void changed( int );
+    void onLayerChanged();
 
   signals:
     // emitted when value changed/selected
@@ -240,7 +249,7 @@ class QgsGrassModuleInput : public QgsGrassModuleGroupBoxItem
     QgsGrassModuleStandardOptions *mModuleStandardOptions;
 
     //! Vector type mask read from option defined by "typeoption" tag, used for QGIS layers in combo
-    //  + type mask defined in configuration fil
+    //  + type mask defined in configuration file
     int mGeometryTypeMask;
 
     //! Name of vector type option associated with this input
@@ -258,30 +267,33 @@ class QgsGrassModuleInput : public QgsGrassModuleGroupBoxItem
     //! Region button
     QPushButton *mRegionButton;
 
+    //! Vector sublayer label
+    QLabel *mLayerLabel;
+
+    //! Vector sublayer combo
+    QComboBox *mLayerComboBox;
+
+    // Module type option names    , mMapId(0)
+    //QStringList mTypeNames;
+    // Module type option types
+    //QList<int> mTypes;
+
+    // Vector type checkboxes
+    QMap<int, QCheckBox*> mTypeCheckBoxes;
+
     //! Optional map option id, if defined, only the layers from the
     //  map currently selected in that option are available.
     //  This is used by nodes layer option for networks.
     QString mMapId;
 
-    //! Vector of map@mapsestd::vectort in the combobox
-    QStringList mMaps;
+    // Currently selected vector
+    QgsGrassVector * mVector;
 
-    //! Type of vector in the combobox
-    QStringList mGeometryTypes;
-
-    //! Layer names in the combobox
-    QStringList mVectorLayerNames;
-
-    //! Pointers to vector layers in combobox
-    QList<QgsMapLayer*> mMapLayers;
-
-    //! Vector of band numbers in combobox for rasters in direct mode
-    QList<int> mBands;
-
-    //! Attribute fields of layers in the combobox
-    QList< QgsFields > mVectorFields;
+    // List of vector layers matching mGeometryTypes for currently selected vector
+    QList<QgsGrassVectorLayer*> mLayers;
 
     //! The imput map will be updated -> must be from current mapset
+    // TODO
     bool mUpdate;
 
     //! Uses region
