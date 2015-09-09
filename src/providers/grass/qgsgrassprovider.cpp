@@ -86,8 +86,8 @@ QgsGrassProvider::QgsGrassProvider( QString uri )
     , mCidxFieldIndex( -1 )
     , mCidxFieldNumCats( 0 )
     , mNumberFeatures( 0 )
-    , mEditing(false)
-    , mEditBuffer(0)
+    , mEditing( false )
+    , mEditBuffer( 0 )
 {
   QgsDebugMsg( QString( "QgsGrassProvider URI: %1" ).arg( uri ) );
 
@@ -225,9 +225,9 @@ QgsGrassProvider::QgsGrassProvider( QString uri )
   setTopoFields();
 
   //mEditFields = QgsFields( mLayers[mLayerId].fields );
-  for ( int i = 0; i < mLayers[mLayerId].fields.size(); i++ ) 
+  for ( int i = 0; i < mLayers[mLayerId].fields.size(); i++ )
   {
-    mEditFields.append( mLayers[mLayerId].fields.at(i) );
+    mEditFields.append( mLayers[mLayerId].fields.at( i ) );
   }
   mEditFields.append( QgsField( "topo_symbol", QVariant::Int ) );
 
@@ -331,7 +331,7 @@ QgsFeatureIterator QgsGrassProvider::getFeatures( const QgsFeatureRequest& reque
   // check if outdated and update if necessary
   ensureUpdated();
 
-  QgsDebugMsg( QString("mEditing = %1").arg(mEditing) );
+  QgsDebugMsg( QString( "mEditing = %1" ).arg( mEditing ) );
 
   return QgsFeatureIterator( new QgsGrassFeatureIterator( new QgsGrassFeatureSource( this ), true, request ) );
 }
@@ -367,9 +367,9 @@ long QgsGrassProvider::featureCount() const
 */
 const QgsFields & QgsGrassProvider::fields() const
 {
-  if ( mEditing ) 
+  if ( mEditing )
   {
-    return mEditFields; 
+    return mEditFields;
   }
   else if ( !isTopoType() )
   {
@@ -657,10 +657,8 @@ void QgsGrassProvider::loadAttributes( GLAYER &layer )
               value = db_get_column_value( column );
               db_convert_value_to_string( value, sqltype, &dbstr );
 
-#if QGISDEBUG > 3
-              QgsDebugMsg( QString( "column: %1" ).arg( db_get_column_name( column ) ) );
-              QgsDebugMsg( QString( "value: %1" ).arg( db_get_string( &dbstr ) ) );
-#endif
+              QgsDebugMsgLevel( QString( "column: %1" ).arg( db_get_column_name( column ) ), 3 );
+              QgsDebugMsgLevel( QString( "value: %1" ).arg( db_get_string( &dbstr ) ), 3 );
 
               layer.attributes[layer.nAttributes].values[i] = strdup( db_get_string( &dbstr ) );
               if ( !db_test_value_isnull( value ) )
@@ -2131,38 +2129,39 @@ QString QgsGrassProvider::primitiveTypeName( int type )
 
 void QgsGrassProvider::startEditing( QgsVectorLayerEditBuffer* buffer )
 {
-  QgsDebugMsg( "Entered");
+  QgsDebugMsg( "Entered" );
   mEditing = true;
   mEditBuffer = buffer;
-  connect( mEditBuffer, SIGNAL(geometryChanged( QgsFeatureId, QgsGeometry & )), this, SLOT( bufferGeometryChanged( QgsFeatureId, QgsGeometry & )) );
+  connect( mEditBuffer, SIGNAL( geometryChanged( QgsFeatureId, QgsGeometry & ) ), this, SLOT( bufferGeometryChanged( QgsFeatureId, QgsGeometry & ) ) );
+  connect( mEditBuffer, SIGNAL( attributeValueChanged( QgsFeatureId, int , const QVariant & ) ), this, SLOT( bufferAttributeValueChanged( QgsFeatureId, int , const QVariant & ) ) );
 }
 
 void QgsGrassProvider::bufferGeometryChanged( QgsFeatureId fid, QgsGeometry &geom )
 {
   int currentFid = fid;
   //if ( mEditFidHash.key( fid) > 0 )
-  if ( mEditFidHash.contains( fid) )
+  if ( mEditFidHash.contains( fid ) )
   {
-    currentFid = mEditFidHash.value( fid);
+    currentFid = mEditFidHash.value( fid );
   }
-  QgsDebugMsg( QString("fid = %1 currentFid = %2").arg(fid).arg(currentFid) );
+  QgsDebugMsg( QString( "fid = %1 currentFid = %2" ).arg( fid ).arg( currentFid ) );
 
   // store changed feature because QgsVectorLayerUndoCommandChangeGeometry::undo() may read it from layer
   QgsFeature feature;
   //getFeatures( QgsFeatureRequest().setFilterFid( currentFid ).setSubsetOfAttributes( QgsAttributeList() ) ).nextFeature( f );
   bool fetched = getFeatures( QgsFeatureRequest().setFilterFid( currentFid ) ).nextFeature( feature );
-  
-  if ( fetched ) 
+
+  if ( fetched )
   {
     mChangedFeatures.insert( currentFid, feature );
-    QgsDebugMsg( QString("fetched = %1 feature.id = %2 valid = %3 stored in mChangedFeatures id = %4").arg(fetched).arg(feature.id()).arg(feature.isValid()).arg( mChangedFeatures.value(currentFid).id() ) );
+    QgsDebugMsg( QString( "fetched = %1 feature.id = %2 valid = %3 stored in mChangedFeatures id = %4" ).arg( fetched ).arg( feature.id() ).arg( feature.isValid() ).arg( mChangedFeatures.value( currentFid ).id() ) );
   }
 
   struct line_pnts *points = Vect_new_line_struct();
   struct line_cats *cats = Vect_new_cats_struct();
 
-  int type = Vect_read_line( mMap, points, cats, (int)currentFid );
-  QgsDebugMsg( QString("type = %1 n_points = %2").arg(type).arg(points->n_points) );
+  int type = Vect_read_line( mMap, points, cats, ( int )currentFid );
+  QgsDebugMsg( QString( "type = %1 n_points = %2" ).arg( type ).arg( points->n_points ) );
 
 
   if ( type == GV_POINT || type == GV_CENTROID )
@@ -2170,31 +2169,90 @@ void QgsGrassProvider::bufferGeometryChanged( QgsFeatureId fid, QgsGeometry &geo
     QgsPoint point = geom.asPoint();
     points->x[0] = point.x();
     points->y[0] = point.y();
-    QgsDebugMsg( QString("x = %1 y = %2").arg( point.x() ).arg( point.y() ) );
+    QgsDebugMsg( QString( "x = %1 y = %2" ).arg( point.x() ).arg( point.y() ) );
   }
   else if ( type == GV_LINE || type == GV_BOUNDARY )
   {
     QgsPolyline polyline = geom.asPolyline();
     for ( int i = 0; i < points->n_points; i++ )
     {
-      points->x[i] = polyline.value(i).x();
-      points->y[i] = polyline.value(i).y();
+      points->x[i] = polyline.value( i ).x();
+      points->y[i] = polyline.value( i ).y();
     }
   }
   else
   {
-    QgsDebugMsg( "unknown type");
+    QgsDebugMsg( "unknown type" );
     return;
   }
-  
-  // Vect_rewrite_line is doing delete/write and line id is lost and next reading by line id fails 
-  int newFid = Vect_rewrite_line( mMap, (int)currentFid, type, points, cats );
+
+  // Vect_rewrite_line is doing delete/write and line id is lost and next reading by line id fails
+  int newFid = Vect_rewrite_line( mMap, ( int )currentFid, type, points, cats );
   //Vect_write_line( mMap, type, points, cats );
   // TODO: must also rewrite existing mappings
 
-  QgsDebugMsg( QString("newFid = %1 currentFid = %2").arg(newFid).arg(currentFid) );
+  QgsDebugMsg( QString( "newFid = %1 currentFid = %2" ).arg( newFid ).arg( currentFid ) );
   //mEditFidHash.insert( newFid, fid );
   mEditFidHash[fid] = newFid;
+}
+
+void QgsGrassProvider::bufferAttributeValueChanged( QgsFeatureId fid, int idx, const QVariant & value )
+{
+  QgsDebugMsg( QString( "fid = %1 idx = %2 value = %3" ).arg( fid ).arg( idx ).arg( value.toString() ) );
+
+  QgsFeature feature;
+  bool fetched = getFeatures( QgsFeatureRequest().setFilterFid( fid ) ).nextFeature( feature );
+
+  if ( !fetched )
+  {
+    QgsDebugMsg( "Cannot get feature" );
+    return;
+  }
+
+  int cat = feature.attribute( "cat" ).toInt();
+  QgsDebugMsg( QString( "cat = %1" ).arg( cat ) );
+
+  GLAYER gLayer = mLayers[mLayerId];
+  struct  field_info *fieldInfo = gLayer.fieldInfo;
+  dbDriver *databaseDriver = db_start_driver_open_database( mLayers[mLayerId].fieldInfo->driver,
+                             mLayers[mLayerId].fieldInfo->database );
+
+  if ( !databaseDriver )
+  {
+    QgsDebugMsg( QString( "Cannot open database %1 by driver %2" ).arg( mLayers[mLayerId].fieldInfo->database ).arg( mLayers[mLayerId].fieldInfo->driver ) );
+  }
+  else
+  {
+    QgsDebugMsg( "Database opened -> open select cursor" );
+    dbString dbstr;
+    db_init_string( &dbstr );
+    // TODO quote etc / type
+    QString sql = QString( "UPDATE %1 SET %2 = '%3' WHERE %4 = %5" )
+                  .arg( fieldInfo->table )
+                  .arg( gLayer.fields.at( idx ).name() )
+                  .arg( value.toString() )
+                  .arg( fieldInfo->key )
+                  .arg( cat );
+    QgsDebugMsg( "sql = " + sql );
+
+    db_set_string( &dbstr, sql.toUtf8().data() );
+
+    QgsDebugMsg( QString( "dbstr = %1" ).arg( db_get_string( &dbstr ) ) );
+    if ( db_execute_immediate( databaseDriver, &dbstr ) == DB_OK )
+    {
+      QgsDebugMsg( "Updated OK" );
+    }
+    else
+    {
+      QgsDebugMsg( "Cannot update" );
+    }
+    db_free_string( &dbstr );
+    // refresh cached attributes
+    //loadAttributes( mLayers[mLayerId] );
+    db_close_database_shutdown_driver( databaseDriver );
+    loadLayerSourcesFromMap( mLayers[mLayerId] );
+  }
+  // TODO free structures
 }
 
 // -------------------------------------------------------------------------------

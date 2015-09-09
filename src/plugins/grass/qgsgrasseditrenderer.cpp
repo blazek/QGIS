@@ -1,5 +1,5 @@
 /***************************************************************************
-    qgsgrasseditrenderer.cpp  
+    qgsgrasseditrenderer.cpp
                              -------------------
     begin                : February, 2015
     copyright            : (C) 2015 by Radim Blazek
@@ -43,27 +43,27 @@ QgsGrassEditRenderer::QgsGrassEditRenderer()
   //QgsSymbolV2 * lineSymbol = QgsSymbolV2::defaultSymbol( QGis::Line );
   //mLineRenderer = new QgsSingleSymbolRendererV2( lineSymbol );
 
-  QHash<int,QColor> colors;
-  colors.insert( QgsGrassProvider::TopoUndefined, QColor( 125, 125, 125 ) );  
-  colors.insert( QgsGrassProvider::TopoLine, QColor( Qt::black ) );  
-  colors.insert( QgsGrassProvider::TopoBoundary0, QColor( Qt::red ) );  
-  colors.insert( QgsGrassProvider::TopoBoundary1, QColor( 255, 125, 0 ) );  
-  colors.insert( QgsGrassProvider::TopoBoundary2, QColor( Qt::green ) );  
+  QHash<int, QColor> colors;
+  colors.insert( QgsGrassProvider::TopoUndefined, QColor( 125, 125, 125 ) );
+  colors.insert( QgsGrassProvider::TopoLine, QColor( Qt::black ) );
+  colors.insert( QgsGrassProvider::TopoBoundary0, QColor( Qt::red ) );
+  colors.insert( QgsGrassProvider::TopoBoundary1, QColor( 255, 125, 0 ) );
+  colors.insert( QgsGrassProvider::TopoBoundary2, QColor( Qt::green ) );
 
-  QHash<int,QString> labels;
-  labels.insert( QgsGrassProvider::TopoUndefined, "Unknown type" );  
-  labels.insert( QgsGrassProvider::TopoLine, "Line" );  
-  labels.insert( QgsGrassProvider::TopoBoundary0, "Boundary (isolated)" );  
-  labels.insert( QgsGrassProvider::TopoBoundary1, "Boundary (area on one side)" );  
-  labels.insert( QgsGrassProvider::TopoBoundary2, "Boundary (areas on both sides)" );  
+  QHash<int, QString> labels;
+  labels.insert( QgsGrassProvider::TopoUndefined, "Unknown type" );
+  labels.insert( QgsGrassProvider::TopoLine, "Line" );
+  labels.insert( QgsGrassProvider::TopoBoundary0, "Boundary (isolated)" );
+  labels.insert( QgsGrassProvider::TopoBoundary1, "Boundary (area on one side)" );
+  labels.insert( QgsGrassProvider::TopoBoundary2, "Boundary (areas on both sides)" );
 
   QgsCategoryList categoryList;
 
   foreach ( int value, colors.keys() )
   {
     QgsSymbolV2 * symbol = QgsSymbolV2::defaultSymbol( QGis::Line );
-    symbol->setColor( colors.value( value) );
-    categoryList << QgsRendererCategoryV2( QVariant( value ), symbol, labels.value( value) );
+    symbol->setColor( colors.value( value ) );
+    categoryList << QgsRendererCategoryV2( QVariant( value ), symbol, labels.value( value ) );
   }
 
   //categoryList << QgsRendererCategoryV2( QVariant( 0 ), symbol, "TopoLine" );
@@ -72,23 +72,23 @@ QgsGrassEditRenderer::QgsGrassEditRenderer()
   colors.clear();
   labels.clear();
 
-  colors.insert( QgsGrassProvider::TopoPoint, QColor( 0,0,0 ) );  
-  colors.insert( QgsGrassProvider::TopoCentroidIn, QColor( 0, 255,0 ) );  
-  colors.insert( QgsGrassProvider::TopoCentroidOut, QColor( 255,0,0 ) );  
-  colors.insert( QgsGrassProvider::TopoCentroidDupl, QColor( 255,0,255 ) );  
+  colors.insert( QgsGrassProvider::TopoPoint, QColor( 0, 0, 0 ) );
+  colors.insert( QgsGrassProvider::TopoCentroidIn, QColor( 0, 255, 0 ) );
+  colors.insert( QgsGrassProvider::TopoCentroidOut, QColor( 255, 0, 0 ) );
+  colors.insert( QgsGrassProvider::TopoCentroidDupl, QColor( 255, 0, 255 ) );
 
-  labels.insert( QgsGrassProvider::TopoPoint, "Point" );  
-  labels.insert( QgsGrassProvider::TopoCentroidIn, "Centroid in area" );  
-  labels.insert( QgsGrassProvider::TopoCentroidOut, "Centroid outside area" );  
-  labels.insert( QgsGrassProvider::TopoCentroidDupl, "Duplicate centroid" );  
+  labels.insert( QgsGrassProvider::TopoPoint, "Point" );
+  labels.insert( QgsGrassProvider::TopoCentroidIn, "Centroid in area" );
+  labels.insert( QgsGrassProvider::TopoCentroidOut, "Centroid outside area" );
+  labels.insert( QgsGrassProvider::TopoCentroidDupl, "Duplicate centroid" );
 
   categoryList.clear();
 
   foreach ( int value, colors.keys() )
   {
     QgsSymbolV2 * symbol = QgsSymbolV2::defaultSymbol( QGis::Point );
-    symbol->setColor( colors.value( value) );
-    categoryList << QgsRendererCategoryV2( QVariant( value ), symbol, labels.value( value) );
+    symbol->setColor( colors.value( value ) );
+    categoryList << QgsRendererCategoryV2( QVariant( value ), symbol, labels.value( value ) );
   }
 
   //categoryList << QgsRendererCategoryV2( QVariant( 0 ), symbol, "TopoLine" );
@@ -101,29 +101,29 @@ QgsGrassEditRenderer::~QgsGrassEditRenderer()
 
 QgsSymbolV2* QgsGrassEditRenderer::symbolForFeature( QgsFeature& feature )
 {
-  //QgsDebugMsg( QString("fid = %1 topo_symbol = %2").arg(feature.id()).arg( feature.attribute(0).toInt() ) );
-  QgsDebugMsg( QString("fid = %1 topo_symbol = %2").arg(feature.id()).arg( feature.attribute( "topo_symbol" ).toInt() ) );
+  //QgsDebugMsg( QString("fid = %1 topo_symbol = %2").arg(feature.id()).arg( feature.attribute( "topo_symbol" ).toInt() ) );
 
   //foreach( QgsRendererCategoryV2 category, mLineRenderer->categories() )
   //{
   //  QgsDebugMsg( "category: " + category.dump() );
   //}
-  
+
   QgsSymbolV2* symbol = mLineRenderer->symbolForFeature( feature );
 
-  if ( !symbol ) {
+  if ( !symbol )
+  {
     symbol = mPointRenderer->symbolForFeature( feature );
   }
-/*
-  if ( symbol ) 
-  {
-    QgsDebugMsg( "color = " + symbol->color().name() );
-  }
-  else
-  {
-    QgsDebugMsg( "no symbol");
-  }
-*/
+  /*
+    if ( symbol )
+    {
+      QgsDebugMsg( "color = " + symbol->color().name() );
+    }
+    else
+    {
+      QgsDebugMsg( "no symbol");
+    }
+  */
   return symbol;
 }
 
@@ -166,8 +166,8 @@ QgsFeatureRendererV2* QgsGrassEditRenderer::clone() const
 {
   QgsGrassEditRenderer* r = new QgsGrassEditRenderer();
   //r->mLineRenderer = dynamic_cast<QgsSingleSymbolRendererV2*> ( mLineRenderer->clone() );
-  r->mLineRenderer = dynamic_cast<QgsCategorizedSymbolRendererV2*> ( mLineRenderer->clone() );
-  r->mPointRenderer = dynamic_cast<QgsCategorizedSymbolRendererV2*> ( mPointRenderer->clone() );
+  r->mLineRenderer = dynamic_cast<QgsCategorizedSymbolRendererV2*>( mLineRenderer->clone() );
+  r->mPointRenderer = dynamic_cast<QgsCategorizedSymbolRendererV2*>( mPointRenderer->clone() );
   return r;
 }
 
@@ -197,14 +197,14 @@ QgsGrassEditRendererWidget::QgsGrassEditRendererWidget( QgsVectorLayer* layer, Q
   //mRenderer = new QgsCategorizedSymbolRendererV2( "", QgsCategoryList() );
   mRenderer = dynamic_cast<QgsGrassEditRenderer*>( renderer->clone() );
   //setupUi( this );
-  if ( !mRenderer ) 
+  if ( !mRenderer )
     return;
 
-  QVBoxLayout* layout = new QVBoxLayout(this);
+  QVBoxLayout* layout = new QVBoxLayout( this );
 
   mLineRendererWidget = QgsCategorizedSymbolRendererV2Widget::create( layer, style, mRenderer->lineRenderer() );
   layout->addWidget( mLineRendererWidget );
-  
+
   mPointRendererWidget = QgsCategorizedSymbolRendererV2Widget::create( layer, style, mRenderer->pointRenderer() );
   layout->addWidget( mPointRendererWidget );
 }

@@ -119,7 +119,7 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
 
   public:
     enum TopoSymbol
-    { 
+    {
       TopoUndefined = 0,
       TopoPoint,
       TopoLine,
@@ -528,6 +528,7 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
 
   public slots:
     void bufferGeometryChanged( QgsFeatureId fid, QgsGeometry &geom );
+    void bufferAttributeValueChanged( QgsFeatureId fid, int idx, const QVariant & value );
 
   private:
     QString mGisdbase;      // map gisdabase
@@ -684,10 +685,10 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
     QgsVectorLayerEditBuffer* mEditBuffer;
 
     // new (after line rewrite) -> old fid mapping
-    QHash<int,int> mEditFidHash;
+    QHash<int, int> mEditFidHash;
 
     // hash of rewritten (deleted) features
-    QHash<int,QgsFeature> mChangedFeatures;
+    QHash<int, QgsFeature> mChangedFeatures;
 };
 
 #endif // QGSGRASSPROVIDER_H
