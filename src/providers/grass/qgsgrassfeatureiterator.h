@@ -19,8 +19,9 @@
 
 #include <QMutex>
 
-class QgsGrassProvider;
-
+#include "qgsgrassprovider.h"
+//class QgsGrassProvider;
+class QgsGrassVectorMapLayer;
 
 class QgsGrassFeatureSource : public QgsAbstractFeatureSource
 {
@@ -31,10 +32,12 @@ class QgsGrassFeatureSource : public QgsAbstractFeatureSource
     virtual QgsFeatureIterator getFeatures( const QgsFeatureRequest& request ) override;
 
   protected:
-    struct Map_info* mMap;
+    struct Map_info* map();
+    //QgsGrassProvider *mProvider;
+    //struct Map_info* mMap;
     int     mLayerType;     // layer type POINT, LINE, ...
     int     mGrassType;     // grass feature type: GV_POINT, GV_LINE | GV_BOUNDARY, GV_AREA,
-    int     mLayerId;       // ID used in layers
+    QgsGrassVectorMapLayer * mLayer;
     QGis::WkbType mQgisType;// WKBPoint, WKBLineString, ...
 
     int    mCidxFieldIndex;    // !UPDATE! Index for layerField in category index or -1 if no such field
@@ -42,6 +45,11 @@ class QgsGrassFeatureSource : public QgsAbstractFeatureSource
 
     QgsFields mFields;
     QTextCodec* mEncoding;
+
+    bool mEditing; // Standard QGIS editing mode
+    // TODO: probably keep fid mapping in provider?
+    //QHash<int,int> mEditFids;
+    //QHash<int,QgsFeature> mChangedFeatures;
 
     friend class QgsGrassFeatureIterator;
 };
@@ -63,10 +71,16 @@ class QgsGrassFeatureIterator : public QgsAbstractFeatureIteratorFromSource<QgsG
     //! end of iterating: free the resources / lock
     virtual bool close() override;
 
-  protected:
-
     // create QgsFeatureId from GRASS geometry object id and cat
     static QgsFeatureId makeFeatureId( int grassId, int cat );
+
+    // Get GRASS line id from QGIS fid
+    static int lidFormFid( QgsFeatureId fid );
+
+    // Get GRASS cat from QGIS fid
+    static int catFormFid( QgsFeatureId fid );
+
+  protected:
 
     void setSelectionRect( const QgsRectangle& rect, bool useIntersect );
 
@@ -86,6 +100,11 @@ class QgsGrassFeatureIterator : public QgsAbstractFeatureIteratorFromSource<QgsG
      */
     void setFeatureAttributes( int cat, QgsFeature *feature, const QgsAttributeList & attlist );
 
+    /** Get topology symbol code
+     * @param lid line or area number
+     * @param type geometry type */
+    QgsGrassProvider::TopoSymbol topoSymbol( int lid, int type );
+
     struct line_pnts *mPoints; // points structure
     struct line_cats *mCats;   // cats structure
     struct ilist     *mList;
@@ -97,12 +116,16 @@ class QgsGrassFeatureIterator : public QgsAbstractFeatureIteratorFromSource<QgsG
     // read from the table and geometry is append and selection set to 2.
     // In the end the selection array is scanned for 1 (attributes missing), and the geometry
     // is returned without attributes
-    char    *mSelection;           // !UPDATE!
-    int     mSelectionSize;        // !UPDATE! Size of selection array
+    char *mSelection;           // !UPDATE!
+    // Size of selection array
+    int mSelectionSize;
 
-    // Either mNextCidx or mNextTopoId is used according to type
-    int    mNextCidx;          // !UPDATE! Next index in cidxFieldIndex to be read, used to find nextFeature
-    int    mNextTopoId;          // !UPDATE! Next topology id to be read, used to find nextFeature, starts from 1
+    // Edit mode is using mNextLid + mNextCidx
+    // Next index in cidxFieldIndex to be read in standard mode or next index of line Cats in editing mode
+    int mNextCidx;
+    // Next topology line/node id to be read in topo mode or next line id in edit mode, starts from 1
+    int mNextLid;
+
 
     /** Reset selection */
     void resetSelection( bool sel );

@@ -558,6 +558,18 @@ QgsGrass *QgsGrass::instance()
   return &sInstance;
 }
 
+void QgsGrass::lock()
+{
+  QgsDebugMsg( "lock" );
+  sMutex.lock();
+}
+
+void QgsGrass::unlock()
+{
+  QgsDebugMsg( "unlock" );
+  sMutex.unlock();
+}
+
 bool QgsGrass::activeMode()
 {
   init();
@@ -2260,7 +2272,7 @@ bool QgsGrass::isExternal( const QgsGrassObject & object )
   }
   G_CATCH( QgsGrass::Exception &e )
   {
-    QgsDebugMsg( "error getting external link: " + QString(e.what()) );
+    QgsDebugMsg( "error getting external link: " + QString( e.what() ) );
   }
   unlock();
   return isExternal;

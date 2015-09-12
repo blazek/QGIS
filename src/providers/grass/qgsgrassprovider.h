@@ -18,6 +18,7 @@
 
 class QgsFeature;
 class QgsField;
+class QgsVectorLayerEditBuffer;
 
 class QgsGrassFeatureIterator;
 
@@ -25,6 +26,9 @@ class QgsGrassFeatureIterator;
 
 #include "qgsvectordataprovider.h"
 #include <vector>
+
+#include "qgsgrassvectormap.h"
+#include "qgsgrassvectormaplayer.h"
 
 /* Update.
  * Vectors are updated (reloaded) if:
@@ -55,59 +59,6 @@ class QgsGrassFeatureIterator;
  * fieldCount() returns original (old) number of fields
  */
 
-/* Attributes. Cache of database attributes (because selection from database is slow). */
-struct GATT
-{
-  int cat;       // category
-  char **values; // pointer to array of pointers to values
-};
-
-/* Grass layer (unique vector+field). */
-struct GLAYER
-{
-  QString path;                  // path to the layer gisdbase+location+mapset+mapName
-  int     field;                 // field number
-  bool    valid;                 // valid is true if layer is opened, once the layer is closed,
-  // valid is set to false and no more used
-  int     mapId;                 // map ID in maps vector
-  struct  Map_info   *map;       // map header
-  struct  field_info *fieldInfo; // field info
-  int     nColumns;              // number of columns in database table, if 0, attributes are not available
-  // and category (column name 'cat') is used instead
-  int     keyColumn;             // number of key column
-  QgsFields fields;              // description of layer fields
-  int     nAttributes;           // number of attributes read to the memory (may be < nRecords)
-  GATT    *attributes;           // vector of attributes
-  double( *minmax )[2];          // minimum and maximum values of attributes
-  int     nUsers;                // number of instances using this layer, increased by open(),
-  // decreased by close()
-};
-
-/* Grass vector map. */
-struct GMAP
-{
-  QString gisdbase;      // map gisdabase
-  QString location;      // map location name (not path!)
-  QString mapset;        // map mapset
-  QString mapName;       // map name
-  QString path;          // path to the layer gisdbase+location+mapset+mapName
-  bool    valid;         // true if map is opened, once the map is closed,
-  // valid is set to false and no more used
-
-  // Vector temporally disabled. Necessary for GRASS Tools on Windows
-  bool frozen;
-
-  struct  Map_info *map; // map header
-  int     nUsers;        // number layers using this map
-  int     update;        // true if the map is opened in update mode -> disabled standard reading
-  // through nextFeature(), featureCount() returns 0
-  QDateTime lastModified; // last modified time of the vector directory, when the map was opened
-  QDateTime lastAttributesModified; // last modified time of the vector 'dbln' file, when the map was opened
-  // or attributes were updated. The 'dbln' file is updated by v.to.db etc.
-  // when attributes are changed
-  int     version;       // version, increased by each closeEdit() and updateMap()
-};
-
 /**
   \class QgsGrassProvider
   \brief Data provider for GRASS vectors
@@ -117,10 +68,27 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
     Q_OBJECT
 
   public:
+    enum TopoSymbol
+    {
+      TopoUndefined = 0,
+      TopoPoint,
+      TopoLine,
+      TopoBoundary0,
+      TopoBoundary1,
+      TopoBoundary2,
+      TopoCentroidIn,
+      TopoCentroidOut,
+      TopoCentroidDupl,
+      TopoNode0,
+      TopoNode1,
+      TopoNode2
+    };
 
     QgsGrassProvider( QString uri = QString() );
 
     virtual ~QgsGrassProvider();
+
+    virtual int capabilities() const override;
 
     virtual QgsAbstractFeatureSource* featureSource() const override;
 
@@ -182,6 +150,11 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
 
     QgsCoordinateReferenceSystem crs() override;
 
+
+    //----------------------------------------------------------------------------
+    QgsGrassObject grassObject() const { return mGrassObject; }
+
+
     // ----------------------------------- Edit ----------------------------------
 
     /** Is the layer editable? I.e. the layer is valid and current user is owner of the mapset
@@ -208,6 +181,9 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
      *   @return false is not frozen
      */
     bool startEdit();
+
+    /* Start standard QGIS editing */
+    void startEditing( QgsVectorLayerEditBuffer* buffer );
 
     /** Freeze vector.
      */
@@ -352,13 +328,7 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
      */
     int findNode( double x, double y, double threshold );
 
-    /** Get columns' definitions
-     *   @param field
-     *   @param cat
-     *   @return vector of attributes
-     */
-    QVector<QgsField> *columns( int field );
-
+    // TODO is it used?
     /** Read attributes from DB
      *   @param field
      *   @param cat
@@ -394,7 +364,7 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
      *   @param field
      *   @param cat
      *   @param update comma separated update string, e.g.: col1 = 5, col2 = 'Val d''Aosta'
-     *   @return empty string or error message
+     *   @return empty string or error messagemLayer
      */
     QString updateAttributes( int field, int cat, const QString &values );
 
@@ -489,10 +459,6 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
     */
     QString description() const override;
 
-
-
-
-
     // Layer type (layerType)
     enum TYPE      // layer name:
     {
@@ -509,19 +475,23 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
       TOPO_NODE    // topology nodes
     };
 
+
+
+  public slots:
+    void bufferGeometryChanged( QgsFeatureId fid, QgsGeometry &geom );
+
   private:
-    QString mGisdbase;      // map gisdabase
-    QString mLocation;      // map location name (not path!)
-    QString mMapset;        // map mapset
-    QString mMapName;       // map name
-    QString mLayer;         // layer name
+    struct Map_info * map();
+    void setMapset();
+
+    QgsGrassObject mGrassObject;
     int     mLayerField;    // field part of layer or -1 if no field specified
     int     mLayerType;     // layer type POINT, LINE, ...
     int     mGrassType;     // grass feature type: GV_POINT, GV_LINE | GV_BOUNDARY, GV_AREA,
     // ( GV_BOUNDARY, GV_CENTROID )
     QGis::WkbType mQgisType;// WKBPoint, WKBLineString, ...
-    int     mLayerId;       // ID used in layers
-    struct  Map_info *mMap; // vector header pointer
+    QString mLayerName;         // layer name
+    QgsGrassVectorMapLayer *mLayer;
     int     mMapVersion;    // The version of the map for which the instance was last time updated
 
     int     mCidxFieldIndex;    // !UPDATE! Index for layerField in category index or -1 if no such field
@@ -532,96 +502,6 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
 
     // create QgsFeatureId from GRASS geometry object id and cat
     static QgsFeatureId makeFeatureId( int grassId, int cat );
-
-    // Reopen map after edit or freeze
-    bool reopenMap();
-
-    // -----------------------------------------------------------------------------------------
-    /* Static variables and methods.
-     * These methods opens GRASS vectors and loads some parts of vectors to the memory.
-     * it maintains the list of opened layers so that sources are not duplicated in the memory.
-     * Layers are identified by layer ID.
-     * The layers have unique URI, if next layer of the same URI is requested,
-     * nUsers is increased and ID of the layer which is already opened is returned.
-     * Attributes are loaded from DB and stored in the memory when layer is opened.
-     */
-
-    /** Open layer. Layer for QgsGrassVector means Map+field
-     *  @param gisdbase
-     *  @param location
-     *  @param mapset
-     *  @param mapName
-     *  @param field
-     *  @return layer ID
-     *  @return -1 cannot open
-     */
-    static int openLayer( QString gisdbase, QString location, QString mapset, QString mapName, int field );
-
-    /** Load sources from the map.
-     *  Must be set: layer.mapId, layer.map, layer.field
-     *  Updates: layer.fieldInfo, layer.nColumns, layer.nAttributes, layer.attributes, layer.keyColumn
-     *  Unchanged: layer.valid
-     *
-     *  Old sources are released, namely: layer.fields and layer.attributes
-     *
-     *  layer.attributes must be pointer to existing array or 0
-     */
-    static void loadLayerSourcesFromMap( GLAYER &layer );
-
-    /** Load attributes from database table.
-     *  Must be set: layer.mapId, layer.map, layer.field
-     *  Updates: layer.fieldInfo, layer.nColumns, layer.nAttributes, layer.attributes, layer.keyColumn
-     *  Unchanged: layer.valid
-     *
-     *  Old sources are released, namely: layer.attributes
-     *
-     *  layer.attributes must be pointer to existing array or 0
-     */
-    static void loadAttributes( GLAYER &layer );
-
-    /** Close layer.
-     *  @param layerId
-     */
-    static void closeLayer( int layerId );
-
-    /** Open map.
-     *  @param gisdbase
-     *  @param location
-     *  @param mapset
-     *  @param mapName
-     *  @return map ID
-     *  @return -1 cannot open
-     */
-    static int openMap( QString gisdbase, QString location, QString mapset, QString mapName );
-
-    /** Close map.
-     *  @param mapId
-     */
-    static void closeMap( int mapId );
-
-    /** Update map. Close and reopen vector, all layers in mLayers using this map are also updated.
-     *  Instances of QgsGrassProvider are not updated and should call update() method.
-     *  @param mapId
-     */
-    static void updateMap( int mapId );
-
-    /** The map is outdated. The map was for example rewritten by GRASS module outside QGIS.
-     *  This function checks internal timestamp stored in QGIS.
-     *  @param mapId
-     */
-    static bool mapOutdated( int mapId );
-
-    /** The attributes are outdated. The table was for example updated by GRASS module outside QGIS.
-     *  This function checks internal timestamp stored in QGIS.
-     *  @param mapId
-     */
-    static bool attributesOutdated( int mapId );
-
-    /** Get layer map.
-     *  @param layerId
-     *  @return pointer to Map_info structure
-     */
-    static struct Map_info *layerMap( int layerId );
 
     /** Get attribute by category(key) and attribute number.
      *  @param layerId
@@ -641,17 +521,15 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
 
     void setTopoFields();
 
-    /* Static arrays of opened layers and vectors */
-    static QVector<GLAYER> mLayers; // Map + field/attributes
-    static QVector<GMAP> mMaps;     // Map
-
     /** Fields used for topo layers */
     QgsFields mTopoFields;
 
+    QgsFields mEditFields;
+
+    QgsVectorLayerEditBuffer* mEditBuffer;
+
     friend class QgsGrassFeatureSource;
     friend class QgsGrassFeatureIterator;
-
-    static int cmpAtt( const void *a, const void *b );
 };
 
 #endif // QGSGRASSPROVIDER_H
