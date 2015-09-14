@@ -47,7 +47,7 @@ QgsGrassVectorMap::QgsGrassVectorMap( const QgsGrassObject & grassObject )
     , mUpdate( false )
     , mVersion( 0 )
     , mMap( 0 )
-    //, mNumLines(0)
+    , mOldNumLines( 0 )
 {
   QgsDebugMsg( "grassObject = " + grassObject.toString() );
   open();
@@ -73,7 +73,7 @@ int QgsGrassVectorMap::userCount() const
 bool QgsGrassVectorMap::open()
 {
   // TODO: refresh layers (reopen)
-  QgsDebugMsg( "entered" );
+  QgsDebugMsg( toString() );
   QgsGrass::init();
   QgsGrass::lock();
   QgsGrass::setLocation( mGrassObject.gisdbase(), mGrassObject.location() );
@@ -161,8 +161,6 @@ bool QgsGrassVectorMap::open()
       return -1;
     }
   }
-  //mNumLines = Vect_get_num_lines(mMap);
-  //QgsDebugMsg( QString("GRASS map successfully opened mNumLines = %1").arg(mNumLines) );
   QgsDebugMsg( "GRASS map successfully opened" );
 
   QgsGrass::unlock();
@@ -193,6 +191,7 @@ QgsGrassVectorMap * QgsGrassVectorMap::openMap( const QgsGrassObject & grassObje
 
 bool QgsGrassVectorMap::startEdit()
 {
+  QgsDebugMsg( toString() );
   // Check number of maps (the problem may appear if static variables are not shared - runtime linker)
   if ( mMaps.size() == 0 )
   {
@@ -205,11 +204,14 @@ bool QgsGrassVectorMap::startEdit()
   mValid = false;
 
   QgsGrass::lock();
-  QgsGrass::setLocation( mGrassObject.gisdbase(), mGrassObject.location() );
+  //QgsGrass::setLocation( mGrassObject.gisdbase(), mGrassObject.location() );
+  // Mapset must be set before Vect_close()
+  QgsGrass::setMapset( mGrassObject.gisdbase(), mGrassObject.location(), mGrassObject.mapset() );
+  QgsDebugMsg( "G_mapset() = " + QString( G_mapset() ) );
 
   // Set current mapset (mapset was previously checked by isGrassEditable() )
   // TODO: Should be done better / in other place ?
-  G__setenv(( char * )"MAPSET",  mGrassObject.mapset().toUtf8().data() );
+  //G__setenv(( char * )"MAPSET",  mGrassObject.mapset().toUtf8().data() );
 
   Vect_close( mMap );
 
@@ -259,7 +261,8 @@ bool QgsGrassVectorMap::startEdit()
   // Write history
   Vect_hist_command( mMap );
 
-  QgsDebugMsg( "Vector successfully reopened for update." );
+  mOldNumLines = Vect_get_num_lines( mMap );
+  QgsDebugMsg( QString( "Vector successfully reopened for update mOldNumLines = %1" ).arg( mOldNumLines ) );
 
   mUpdate = true;
   mValid = true;
@@ -269,21 +272,23 @@ bool QgsGrassVectorMap::startEdit()
 
 bool QgsGrassVectorMap::closeEdit( bool newMap )
 {
+  Q_UNUSED( newMap );
+  QgsDebugMsg( toString() );
   if ( !mValid || !mUpdate )
   {
     return false;
   }
 
-  mValid = false;
-  mVersion++;
+  // mValid = false; cloes() is checking mValid
 
   QgsGrass::lock();
-  QgsGrass::setLocation( mGrassObject.gisdbase(), mGrassObject.location() );
+  // Mapset must be set before Vect_close()
+  QgsGrass::setMapset( mGrassObject.gisdbase(), mGrassObject.location(), mGrassObject.mapset() );
+  QgsDebugMsg( "G_mapset() = " + QString( G_mapset() ) );
 
   // Set current mapset (mapset was previously checked by isGrassEditable() )
-  // TODO: Should be done better / in other place ?
-  // TODO: Is it necessary for build/close ?
-  G__setenv(( char * )"MAPSET",  mGrassObject.mapset().toUtf8().data() );
+  //G__setenv(( char * )"MAPSET",  mGrassObject.mapset().toUtf8().data() );
+  //QgsDebugMsg( "G_mapset() = " + QString(G_mapset()) );
 
 #if defined(GRASS_VERSION_MAJOR) && defined(GRASS_VERSION_MINOR) && \
     ( ( GRASS_VERSION_MAJOR == 6 && GRASS_VERSION_MINOR >= 4 ) || GRASS_VERSION_MAJOR > 6 )
@@ -294,6 +299,19 @@ bool QgsGrassVectorMap::closeEdit( bool newMap )
   Vect_build( mMap, stderr );
 #endif
 
+#if 0
+  if ( Vect_save_topo( mMap ) )
+  {
+    QgsDebugMsg( "topo saved" );
+  }
+  else
+  {
+    QgsDebugMsg( "saving topo failed" );
+  }
+#endif
+
+  // TODO?
+#if 0
   // If a new map was created close the map and return
   if ( newMap )
   {
@@ -306,10 +324,15 @@ bool QgsGrassVectorMap::closeEdit( bool newMap )
     QgsGrass::unlock();
     return true;
   }
+#endif
 
   mUpdate = false;
+  QgsGrass::unlock();
+  // We do not need to reopen
   close();
   open();
+  mVersion++;
+  QgsDebugMsg( "edit closed" );
   return mValid;
 }
 
@@ -376,16 +399,24 @@ void QgsGrassVectorMap::closeLayer( QgsGrassVectorMapLayer * layer )
     QgsDebugMsg( "No more map users -> close" );
     layer->map()->close();
   }
+  QgsDebugMsg( "layer closed" );
 }
 
 void QgsGrassVectorMap::close()
 {
+  QgsDebugMsg( toString() );
   QgsGrass::lock();
-  if ( mValid )
+  if ( !mValid )
   {
-    QgsGrass::setLocation( mGrassObject.gisdbase(), mGrassObject.location() );
+    QgsDebugMsg( "map is not valid" );
+  }
+  else
+  {
+    // Mapset must be set before Vect_close()
+    QgsGrass::setMapset( mGrassObject.gisdbase(), mGrassObject.location(), mGrassObject.mapset() );
 
     // TODO necessary?
+#if 0
     bool mapsetunset = !G__getenv( "MAPSET" ) || !*G__getenv( "MAPSET" );
     if ( mapsetunset )
     {
@@ -393,31 +424,34 @@ void QgsGrassVectorMap::close()
       // TODO: Is it necessary for close ?
       G__setenv(( char * )"MAPSET", mGrassObject.mapset().toUtf8().data() );
     }
+#endif
     G_TRY
     {
       Vect_close( mMap );
+      QgsDebugMsg( "map closed" );
     }
     G_CATCH( QgsGrass::Exception &e )
     {
       QgsDebugMsg( "Vect_close failed:" + QString( e.what() ) );
     }
-
     // TODO necessary?
+#if 0
     if ( mapsetunset )
     {
       G__setenv(( char * )"MAPSET", "" );
     }
+#endif
   }
   QgsGrass::vectDestroyMapStruct( mMap );
   mMap = 0;
-  //mNumLines = 0;
+  //mOldNumLines = 0;
   mValid = false;
   QgsGrass::unlock();
 }
 
 void QgsGrassVectorMap::update()
 {
-  QgsDebugMsg( "mGrassObject = " + mGrassObject.toString() );
+  QgsDebugMsg( toString() );
 
   // Close and reopen
   close();
@@ -468,4 +502,9 @@ int QgsGrassVectorMap::numLines()
   QgsDebugMsg( "entered" );
 
   return ( Vect_get_num_lines( mMap ) );
+}
+
+QString QgsGrassVectorMap::toString()
+{
+  return mGrassObject.mapsetPath() + "/" +  mGrassObject.name();
 }

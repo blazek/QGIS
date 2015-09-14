@@ -26,7 +26,8 @@
 #include "qgssymbollayerv2.h"
 //#include "qgsogcutils.h"
 #include "qgscategorizedsymbolrendererv2.h"
-#include "symbology-ng/qgscategorizedsymbolrendererv2widget.h"
+#include "qgsrendererv2registry.h"
+#include "qgscategorizedsymbolrendererv2widget.h"
 
 //#include "qgspointdisplacementrenderer.h"
 //#include "qgsinvertedpolygonrenderer.h"
@@ -38,6 +39,8 @@
 
 QgsGrassEditRenderer::QgsGrassEditRenderer()
     : QgsFeatureRendererV2( "grassEdit" )
+    , mLineRenderer( 0 )
+    , mMarkerRenderer( 0 )
 {
 //  Q_ASSERT( symbol );
   //QgsSymbolV2 * lineSymbol = QgsSymbolV2::defaultSymbol( QGis::Line );
@@ -92,16 +95,28 @@ QgsGrassEditRenderer::QgsGrassEditRenderer()
   }
 
   //categoryList << QgsRendererCategoryV2( QVariant( 0 ), symbol, "TopoLine" );
-  mPointRenderer = new QgsCategorizedSymbolRendererV2( "topo_symbol", categoryList );
+  mMarkerRenderer = new QgsCategorizedSymbolRendererV2( "topo_symbol", categoryList );
 }
 
 QgsGrassEditRenderer::~QgsGrassEditRenderer()
 {
 }
 
+void QgsGrassEditRenderer::setLineRenderer( QgsFeatureRendererV2 *renderer )
+{
+  delete mLineRenderer;
+  mLineRenderer = renderer;
+}
+void QgsGrassEditRenderer::setMarkerRenderer( QgsFeatureRendererV2 *renderer )
+{
+  delete mMarkerRenderer;
+  mMarkerRenderer = renderer;
+}
+
+
 QgsSymbolV2* QgsGrassEditRenderer::symbolForFeature( QgsFeature& feature, QgsRenderContext& context )
 {
-  //QgsDebugMsg( QString("fid = %1 topo_symbol = %2").arg(feature.id()).arg( feature.attribute(0).toInt() ) );
+  QgsDebugMsgLevel( QString( "fid = %1 topo_symbol = %2" ).arg( feature.id() ).arg( feature.attribute( "topo_symbol" ).toString() ), 3 );
 
   //foreach( QgsRendererCategoryV2 category, mLineRenderer->categories() )
   //{
@@ -112,18 +127,19 @@ QgsSymbolV2* QgsGrassEditRenderer::symbolForFeature( QgsFeature& feature, QgsRen
 
   if ( !symbol )
   {
-    symbol = mPointRenderer->symbolForFeature( feature, context );
+    QgsDebugMsgLevel( "no line symbol -> try point", 3 );
+    symbol = mMarkerRenderer->symbolForFeature( feature, context );
   }
-  /*
-    if ( symbol )
-    {
-      QgsDebugMsg( "color = " + symbol->color().name() );
-    }
-    else
-    {
-      QgsDebugMsg( "no symbol");
-    }
-  */
+
+  if ( symbol )
+  {
+    QgsDebugMsgLevel( "color = " + symbol->color().name(), 3 );
+  }
+  else
+  {
+    QgsDebugMsgLevel( "no symbol", 3 );
+  }
+
   return symbol;
 }
 
@@ -131,16 +147,16 @@ void QgsGrassEditRenderer::startRender( QgsRenderContext& context, const QgsFiel
 {
   Q_UNUSED( fields );
   // TODO better
-  QgsFields topoFields;
-  topoFields.append( QgsField( "topo_symbol", QVariant::Int, "int" ) );
-  mLineRenderer->startRender( context, topoFields );
-  mPointRenderer->startRender( context, topoFields );
+  //QgsFields topoFields;
+  //topoFields.append( QgsField( "topo_symbol", QVariant::Int, "int" ) );
+  mLineRenderer->startRender( context, fields );
+  mMarkerRenderer->startRender( context, fields );
 }
 
 void QgsGrassEditRenderer::stopRender( QgsRenderContext& context )
 {
   mLineRenderer->stopRender( context );
-  mPointRenderer->stopRender( context );
+  mMarkerRenderer->stopRender( context );
 }
 
 QList<QString> QgsGrassEditRenderer::usedAttributes()
@@ -165,7 +181,7 @@ QgsFeatureRendererV2* QgsGrassEditRenderer::clone() const
 {
   QgsGrassEditRenderer* r = new QgsGrassEditRenderer();
   r->mLineRenderer = dynamic_cast<QgsCategorizedSymbolRendererV2*>( mLineRenderer->clone() );
-  r->mPointRenderer = dynamic_cast<QgsCategorizedSymbolRendererV2*>( mPointRenderer->clone() );
+  r->mMarkerRenderer = dynamic_cast<QgsCategorizedSymbolRendererV2*>( mMarkerRenderer->clone() );
   return r;
 }
 
@@ -178,6 +194,62 @@ QString QgsGrassEditRenderer::dump() const
 {
   return "GRASS edit renderer";
 }
+
+QDomElement QgsGrassEditRenderer::save( QDomDocument& doc )
+{
+  QgsDebugMsg( "entered" );
+  QDomElement rendererElem = doc.createElement( RENDERER_TAG_NAME );
+  rendererElem.setAttribute( "type", "grassEdit" );
+
+  QDomElement lineElem = doc.createElement( "line" );
+  rendererElem.appendChild( lineElem );
+  lineElem.appendChild( mLineRenderer->save( doc ) );
+
+  QDomElement pointElem = doc.createElement( "marker" );
+  rendererElem.appendChild( pointElem );
+  pointElem.appendChild( mMarkerRenderer->save( doc ) );
+
+  return rendererElem;
+}
+
+
+QgsFeatureRendererV2* QgsGrassEditRenderer::create( QDomElement& element )
+{
+  QgsDebugMsg( "entered" );
+  QgsGrassEditRenderer *renderer = new QgsGrassEditRenderer();
+
+  QDomElement childElem = element.firstChildElement();
+  while ( !childElem.isNull() )
+  {
+    QDomElement elem = childElem.firstChildElement();
+    if ( !elem.isNull() )
+    {
+      QString rendererType = childElem.attribute( "type" );
+      QgsDebugMsg( "childElem.tagName() = " + childElem.tagName() + " rendererType = " + rendererType );
+      QgsRendererV2AbstractMetadata* meta = QgsRendererV2Registry::instance()->rendererMetadata( rendererType );
+      if ( meta )
+      {
+        QgsFeatureRendererV2* subRenderer = meta->createRenderer( elem );
+        if ( subRenderer )
+        {
+          QgsDebugMsg( "renderer created : " + renderer->type() );
+          if ( childElem.tagName() == "line" )
+          {
+            renderer->setLineRenderer( subRenderer );
+          }
+          else if ( childElem.tagName() == "marker" )
+          {
+            renderer->setMarkerRenderer( subRenderer );
+          }
+        }
+      }
+    }
+    childElem = childElem.nextSiblingElement();
+  }
+
+  return renderer;
+}
+
 
 //------------------------------------------------------------------------------------------------
 
@@ -213,7 +285,7 @@ QgsGrassEditRendererWidget::~QgsGrassEditRendererWidget()
 QgsFeatureRendererV2* QgsGrassEditRendererWidget::renderer()
 {
   mRenderer->setLineRenderer( dynamic_cast<QgsCategorizedSymbolRendererV2*>( mLineRendererWidget->renderer() ) );
-  mRenderer->setPointRenderer( dynamic_cast<QgsCategorizedSymbolRendererV2*>( mPointRendererWidget->renderer() ) );
+  mRenderer->setMarkerRenderer( dynamic_cast<QgsCategorizedSymbolRendererV2*>( mPointRendererWidget->renderer() ) );
   return mRenderer;
 }
 

@@ -26,6 +26,7 @@
 #include "qgsfeature.h"
 #include "qgsfield.h"
 #include "qgsrectangle.h"
+#include "qgsvectorlayer.h"
 #include "qgsvectorlayereditbuffer.h"
 
 #include "qgsgrass.h"
@@ -355,6 +356,9 @@ long QgsGrassProvider::featureCount() const
 */
 const QgsFields & QgsGrassProvider::fields() const
 {
+  // TODO
+  return mLayer->fields();
+
   if ( mEditBuffer )
   {
     return mEditFields;
@@ -522,29 +526,18 @@ void QgsGrassProvider::thaw()
 #endif
 }
 
-bool QgsGrassProvider::startEdit()
-{
-  QgsDebugMsg( "uri = " +  dataSourceUri() );
-
-  if ( !isValid() || !isGrassEditable() )
-  {
-    return false;
-  }
-
-  return mLayer->map()->startEdit();
-}
-
 bool QgsGrassProvider::closeEdit( bool newMap )
 {
   QgsDebugMsg( "entered" );
 
   if ( !isValid() )
   {
+    QgsDebugMsg( "not valid" );
     return false;
   }
 
+  mEditBuffer = 0;
   return mLayer->map()->closeEdit( newMap );
-
 }
 
 void QgsGrassProvider::ensureUpdated()
@@ -1235,28 +1228,45 @@ void QgsGrassProvider::setTopoFields()
   }
 }
 
-void QgsGrassProvider::startEditing( QgsVectorLayerEditBuffer* buffer )
+void QgsGrassProvider::startEditing( QgsVectorLayer *vectorLayer )
 {
-  QgsDebugMsg( "Entered" );
-  if ( mEditBuffer )
+  QgsDebugMsg( "uri = " +  dataSourceUri() );
+  if ( !vectorLayer || !vectorLayer->editBuffer() )
   {
+    QgsDebugMsg( "vector or buffer is null" );
     return;
   }
-  mEditBuffer = buffer;
-  connect( mEditBuffer, SIGNAL( geometryChanged( QgsFeatureId, QgsGeometry & ) ), this, SLOT( bufferGeometryChanged( QgsFeatureId, QgsGeometry & ) ) );
+  if ( !isValid() || !isGrassEditable() )
+  {
+    QgsDebugMsg( "not valid or not editable" );
+    return;
+  }
+  if ( mEditBuffer )
+  {
+    QgsDebugMsg( "already edited" );
+    return;
+  }
+
+  mLayer->map()->startEdit();
+
+  mEditBuffer = vectorLayer->editBuffer();
+  connect( mEditBuffer, SIGNAL( geometryChanged( QgsFeatureId, QgsGeometry & ) ), SLOT( bufferGeometryChanged( QgsFeatureId, QgsGeometry & ) ) );
+  connect( vectorLayer, SIGNAL( beforeCommitChanges() ), SLOT( onBeforeCommitChanges() ) );
+  connect( vectorLayer, SIGNAL( editingStopped() ), SLOT( onEditingStopped() ) );
+  QgsDebugMsg( "edit started" );
 }
 
 void QgsGrassProvider::bufferGeometryChanged( QgsFeatureId fid, QgsGeometry &geom )
 {
   // TODO
-  int lid = QgsGrassFeatureIterator::lidFormFid( fid );
+  int oldLid = QgsGrassFeatureIterator::lidFormFid( fid );
   //int cat = QgsGrassFeatureIterator::catFormFid ( fid );
-  int realLine = lid;
-  if ( mLayer->map()->newLids().contains( lid ) ) // if it was changed already
+  int realLine = oldLid;
+  if ( mLayer->map()->newLids().contains( oldLid ) ) // if it was changed already
   {
-    realLine = mLayer->map()->newLids().value( lid );
+    realLine = mLayer->map()->newLids().value( oldLid );
   }
-  QgsDebugMsg( QString( "fid = %1 lid = %2 realLine = %3" ).arg( fid ).arg( lid ).arg( realLine ) );
+  QgsDebugMsg( QString( "fid = %1 oldLid = %2 realLine = %3" ).arg( fid ).arg( oldLid ).arg( realLine ) );
 
   // TODO
 #if 0
@@ -1306,13 +1316,23 @@ void QgsGrassProvider::bufferGeometryChanged( QgsFeatureId fid, QgsGeometry &geo
   }
 
   // Vect_rewrite_line is doing delete/write and line id is lost and next reading by line id fails
-  int newLine = Vect_rewrite_line( map(), ( int )realLine, type, points, cats );
-  //Vect_write_line( map(), type, points, cats );
-  // TODO: must also rewrite existing mappings
+  int newLid = Vect_rewrite_line( map(), ( int )realLine, type, points, cats );
+  // TODO: must also rewrite existing mappings ?
 
-  QgsDebugMsg( QString( "newLine = %1 currentFid = %2" ).arg( newLine ).arg( realLine ) );
-  //mOldLids[newLine] = fid;
-  //mNewLids[fid] = newLine;
+  QgsDebugMsg( QString( "oldLid = %1 newLine = %2" ).arg( oldLid ).arg( newLid ) );
+  mLayer->map()->oldLids()[newLid] = oldLid;
+  mLayer->map()->newLids()[oldLid] = newLid;
+}
+
+void QgsGrassProvider::onBeforeCommitChanges()
+{
+  QgsDebugMsg( "entered" );
+}
+
+void QgsGrassProvider::onEditingStopped()
+{
+  QgsDebugMsg( "entered" );
+  closeEdit( false );
 }
 
 // -------------------------------------------------------------------------------

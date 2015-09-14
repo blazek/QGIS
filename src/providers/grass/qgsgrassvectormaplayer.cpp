@@ -41,6 +41,7 @@ QgsGrassVectorMapLayer::QgsGrassVectorMapLayer( QgsGrassVectorMap *map, int fiel
     , mValid( false )
     , mMap( map )
     , mFieldInfo( 0 )
+    , mHasTable( false )
     , mKeyColumn( -1 )
     , mUsers( 0 )
 {
@@ -173,6 +174,7 @@ void QgsGrassVectorMapLayer::load()
         }
         else
         {
+          mHasTable = true;
           // Read attributes to the memory
           while ( true )
           {
@@ -213,40 +215,38 @@ void QgsGrassVectorMapLayer::load()
 
               QgsDebugMsgLevel( QString( "column = %1 value = %2" ).arg( db_get_column_name( column ) ).arg( db_get_string( &dbstr ) ), 3 );
 
-              if ( !db_test_value_isnull( value ) ) // there is a bug in GRASS lib, it is giving 0 if it is null
+              QVariant variant;
+              if ( !db_test_value_isnull( value ) )
               {
-                values << QVariant();
-                continue;
+                int iv;
+                double dv;
+                //layer.mAttributes[layer.nAttributes].values[i] = strdup( db_get_string( &dbstr ) );
+                switch ( ctype )
+                {
+                  case DB_C_TYPE_INT:
+                    iv = db_get_value_int( value );
+                    variant = QVariant( iv );
+                    mMinMax[i].first = qMin( mMinMax[i].first, ( double )iv );
+                    mMinMax[i].second = qMin( mMinMax[i].second, ( double )iv );
+                    break;
+                  case DB_C_TYPE_DOUBLE:
+                    dv = db_get_value_double( value );
+                    variant = QVariant( dv );
+                    mMinMax[i].first = qMin( mMinMax[i].first, dv );
+                    mMinMax[i].second = qMin( mMinMax[i].second, dv );
+                    break;
+                  case DB_C_TYPE_STRING:
+                    // Store as byte array so that codec may be used later
+                    variant = QVariant( QByteArray( db_get_value_string( value ) ) );
+                    break;
+                  case DB_C_TYPE_DATETIME:
+                    variant = QVariant( QByteArray( db_get_string( &dbstr ) ) );
+                  default:
+                    variant = QVariant( QByteArray( db_get_string( &dbstr ) ) );
+                }
               }
-
-              int iv;
-              double dv;
-              //layer.mAttributes[layer.nAttributes].values[i] = strdup( db_get_string( &dbstr ) );
-              switch ( ctype )
-              {
-                case DB_C_TYPE_INT:
-                  iv = db_get_value_int( value );
-                  values << QVariant( iv );
-                  mMinMax[i].first = qMin( mMinMax[i].first, ( double )iv );
-                  mMinMax[i].second = qMin( mMinMax[i].second, ( double )iv );
-                  break;
-                case DB_C_TYPE_DOUBLE:
-                  dv = db_get_value_double( value );
-                  values << QVariant( dv );
-                  mMinMax[i].first = qMin( mMinMax[i].first, dv );
-                  mMinMax[i].second = qMin( mMinMax[i].second, dv );
-                  break;
-                case DB_C_TYPE_STRING:
-                  // Store as byte array so that codec may be used later
-                  values << QVariant( QByteArray( db_get_value_string( value ) ) );
-                  break;
-                case DB_C_TYPE_DATETIME:
-                  db_convert_value_to_string( value, sqltype, &dbstr );
-                  values << QVariant( QByteArray( db_get_string( &dbstr ) ) );
-                default:
-                  db_convert_value_to_string( value, sqltype, &dbstr );
-                  values << QVariant( QByteArray( db_get_string( &dbstr ) ) );
-              }
+              QgsDebugMsgLevel( QString( "column = %1 variant = %2" ).arg( db_get_column_name( column ) ).arg( variant.toString() ), 3 );
+              values << variant;
             }
             mAttributes.insert( cat, values );
           }
@@ -289,6 +289,22 @@ void QgsGrassVectorMapLayer::load()
     mMinMax << minMax;
   }
 
+  // TODO
+  // add topo field for editing
+  mFields.append( QgsField( "topo_symbol", QVariant::Int, "integer" ) );
+
   QgsDebugMsg( QString( "layer loaded mFields.size() = %1 mAttributes.size() = %2" ).arg( mFields.size() ).arg( mAttributes.size() ) );
   mValid = true;
+}
+
+void QgsGrassVectorMapLayer::addUser()
+{
+  mUsers++;
+  QgsDebugMsg( QString( "user added mUsers = %1" ).arg( mUsers ) );
+}
+
+void QgsGrassVectorMapLayer::removeUser()
+{
+  mUsers--;
+  QgsDebugMsg( QString( "user removed mUsers = %1" ).arg( mUsers ) );
 }

@@ -154,6 +154,9 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
     //----------------------------------------------------------------------------
     QgsGrassObject grassObject() const { return mGrassObject; }
 
+    // ----------------------------------- New edit --------------------------------
+    bool changeGeometryValues( QgsGeometryMap & geometry_map ) override { Q_UNUSED( geometry_map ); return true; }
+
 
     // ----------------------------------- Edit ----------------------------------
 
@@ -176,14 +179,9 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
      */
     bool isFrozen();
 
-    /** Start editing. Reopen the vector for update and set GMAP.update = true
-     *   @return true is frozen
-     *   @return false is not frozen
-     */
-    bool startEdit();
-
     /* Start standard QGIS editing */
-    void startEditing( QgsVectorLayerEditBuffer* buffer );
+    //void startEditing( QgsVectorLayerEditBuffer* buffer );
+    void startEditing( QgsVectorLayer *vectorLayer );
 
     /** Freeze vector.
      */
@@ -479,6 +477,8 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
 
   public slots:
     void bufferGeometryChanged( QgsFeatureId fid, QgsGeometry &geom );
+    void onBeforeCommitChanges();
+    void onEditingStopped();
 
   private:
     struct Map_info * map();

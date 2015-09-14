@@ -33,6 +33,7 @@
 #include "qgslayertreeview.h"
 #include "qgslogger.h"
 #include "qgsmapcanvas.h"
+#include "qgsmaplayerstylemanager.h"
 #include "qgsrubberband.h"
 #include "qgsproject.h"
 #include "qgsrendererv2registry.h"
@@ -236,7 +237,7 @@ void QgsGrassPlugin::onLayerWasAdded( QgsMapLayer* theMapLayer )
     return;
 
   QgsDebugMsg( "connect editing" );
-  connect( vectorLayer, SIGNAL( editingStarted() ), this, SLOT( onLayerEditingStarted() ) );
+  connect( vectorLayer, SIGNAL( editingStarted() ), this, SLOT( onEditingStarted() ) );
 }
 
 void QgsGrassPlugin::onCurrentLayerChanged( QgsMapLayer* layer )
@@ -245,7 +246,7 @@ void QgsGrassPlugin::onCurrentLayerChanged( QgsMapLayer* layer )
   QgsDebugMsg( "Entered" );
 }
 
-void QgsGrassPlugin::onLayerEditingStarted()
+void QgsGrassPlugin::onEditingStarted()
 {
   QgsDebugMsg( "Entered" );
   QgsVectorLayer *vectorLayer = qobject_cast<QgsVectorLayer *>( sender() );
@@ -260,22 +261,53 @@ void QgsGrassPlugin::onLayerEditingStarted()
 
   QgsRendererV2Registry::instance()->addRenderer( new QgsRendererV2Metadata( "grassEdit",
       QObject::tr( "GRASS Edit" ),
-      //QgsGrassEditRenderer::create,
-      //QgsGrassEditRenderer::createFromSld ) );
-      0, 0, QIcon(),
-      QgsGrassEditRendererWidget::create
-                                                                           ) );
-
+      QgsGrassEditRenderer::create,
+      QIcon(),
+      QgsGrassEditRendererWidget::create ) );
 
   QgsGrassEditRenderer *renderer = new QgsGrassEditRenderer();
 
-  //QgsSymbolV2 * lineSymbol = QgsSymbolV2::defaultSymbol( QGis::Line );
-  //QgsFeatureRendererV2 * renderer = QgsFeatureRendererV2::defaultRenderer( QGis::Line );
+  mOldStyles[vectorLayer] = vectorLayer->styleManager()->currentStyle();
 
-  grassProvider->startEdit();
-  grassProvider->startEditing( vectorLayer->editBuffer() );
+  // Because the edit style may be stored to project:
+  // - do not translate because it may be loaded in QGIS running with different language
+  // - do not change the name until really necessary because it could not be found in project
+  QString editStyleName = "GRASS Edit"; // should not be translated
+
+  if ( vectorLayer->styleManager()->styles().contains( editStyleName ) )
+  {
+    QgsDebugMsg( editStyleName + " style exists -> set as current" );
+    vectorLayer->styleManager()->setCurrentStyle( editStyleName );
+  }
+  else
+  {
+    QgsDebugMsg( "create and set style " + editStyleName );
+    vectorLayer->styleManager()->addStyleFromLayer( editStyleName ); // there seems no
+
+    //vectorLayer->styleManager()->addStyle( editStyleName, QgsMapLayerStyle() );
+    vectorLayer->styleManager()->setCurrentStyle( editStyleName );
+    vectorLayer->setRendererV2( renderer );
+  }
+
+  grassProvider->startEditing( vectorLayer );
   vectorLayer->updateFields();
-  vectorLayer->setRendererV2( renderer );
+
+  connect( vectorLayer, SIGNAL( editingStopped() ), SLOT( onEditingStopped() ) );
+}
+
+void QgsGrassPlugin::onEditingStopped()
+{
+  QgsDebugMsg( "entered" );
+  QgsVectorLayer *vectorLayer = qobject_cast<QgsVectorLayer *>( sender() );
+  if ( vectorLayer )
+  {
+    QString style = mOldStyles.value( vectorLayer );
+    if ( vectorLayer->styleManager()->currentStyle() == "GRASS Edit" ) // not changed by user
+    {
+      QgsDebugMsg( "reset style to " + style );
+      vectorLayer->styleManager()->setCurrentStyle( style );
+    }
+  }
 }
 
 void QgsGrassPlugin::mapsetChanged()
@@ -551,6 +583,14 @@ void QgsGrassPlugin::projectRead()
 void QgsGrassPlugin::newProject()
 {
   QgsDebugMsg( "entered" );
+  // debug
+  // activating edit tools by activating layer does not work if layer is loaded from project
+  QgsVectorLayer* vectorLayer = qGisInterface->addVectorLayer( "/home/radim/gdata/grass-plugin/world_location_4326/edit/simple/1_line", "line", "grass" );
+  if ( vectorLayer )
+  {
+    vectorLayer->startEditing();
+    qGisInterface->setActiveLayer( vectorLayer );
+  }
 }
 
 // Unload the plugin by cleaning up the GUI

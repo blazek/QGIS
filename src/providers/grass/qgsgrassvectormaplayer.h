@@ -29,11 +29,12 @@ class QgsGrassVectorMapLayer
     QgsGrassVectorMap *map() { return mMap; }
     QgsFields & fields() { return mFields; }
     QMap<int, QList<QVariant>> & attributes() { return mAttributes; }
+    bool hasTable() { return mHasTable; }
     int keyColumn() { return mKeyColumn; }
     QList<QPair<double, double>> minMax() { return mMinMax; }
     int userCount() { return mUsers; }
-    void addUser() { mUsers++; }
-    void removeUser() { mUsers--; }
+    void addUser();
+    void removeUser();
 
     /** Load attributes from the map. Old sources are released. */
     void load();
@@ -47,6 +48,7 @@ class QgsGrassVectorMapLayer
     bool mValid;
     QgsGrassVectorMap *mMap;
     struct field_info *mFieldInfo;
+    bool mHasTable;
     // index of key column
     int mKeyColumn;
     QgsFields mFields;

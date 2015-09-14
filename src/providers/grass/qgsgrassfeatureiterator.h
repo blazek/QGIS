@@ -18,6 +18,7 @@
 #include "qgsfeatureiterator.h"
 
 #include <QMutex>
+#include <QBitArray>
 
 #include "qgsgrassprovider.h"
 //class QgsGrassProvider;
@@ -32,6 +33,21 @@ class QgsGrassFeatureSource : public QgsAbstractFeatureSource
     virtual QgsFeatureIterator getFeatures( const QgsFeatureRequest& request ) override;
 
   protected:
+#if 0
+    enum Selection
+    {
+
+      NotSelected = 0, /*!< not selected */
+      Selected = 1, /*!< line/area selected */
+      Used = 2 /*!< the line was already used to create feature read in this cycle.
+                * The codes Used must be reset to Selected if getFirstFeature() or select() is called.
+                * Distinction between Selected and Used is used if attribute table exists, in which case
+                * attributes are read from the table and line geometry is attached to attributes and selection
+                * for that line is set to Used. In the end the selection is scanned for Selected (attributes missing)
+                * and the geometry is returned without attributes. */
+    };
+#endif
+
     struct Map_info* map();
     //QgsGrassProvider *mProvider;
     //struct Map_info* mMap;
@@ -81,6 +97,8 @@ class QgsGrassFeatureIterator : public QgsAbstractFeatureIteratorFromSource<QgsG
     static int catFormFid( QgsFeatureId fid );
 
   protected:
+    //void lock();
+    //void unlock();
 
     void setSelectionRect( const QgsRectangle& rect, bool useIntersect );
 
@@ -91,14 +109,14 @@ class QgsGrassFeatureIterator : public QgsAbstractFeatureIteratorFromSource<QgsG
      *  @param feature
      *  @param cat category number
      */
-    void setFeatureAttributes( int cat, QgsFeature *feature );
+    void setFeatureAttributes( int cat, QgsFeature *feature, QgsGrassProvider::TopoSymbol symbol );
 
     /** Set feature attributes.
      *  @param feature
      *  @param cat category number
      *  @param attlist a list containing the index number of the fields to set
      */
-    void setFeatureAttributes( int cat, QgsFeature *feature, const QgsAttributeList & attlist );
+    void setFeatureAttributes( int cat, QgsFeature *feature, const QgsAttributeList & attlist, QgsGrassProvider::TopoSymbol symbol );
 
     /** Get topology symbol code
      * @param lid line or area number
@@ -109,16 +127,8 @@ class QgsGrassFeatureIterator : public QgsAbstractFeatureIteratorFromSource<QgsG
     struct line_cats *mCats;   // cats structure
     struct ilist     *mList;
 
-    // selection: array of size nlines or nareas + 1, set to 1 - selected or 0 - not selected, 2 - read
-    // Code 2 means that the line was already read in this cycle, all 2 must be reset to 1
-    // if getFirstFeature() or select() is calles.
-    // Distinction between 1 and 2 is used if attribute table exists, in that case attributes are
-    // read from the table and geometry is append and selection set to 2.
-    // In the end the selection array is scanned for 1 (attributes missing), and the geometry
-    // is returned without attributes
-    char *mSelection;           // !UPDATE!
-    // Size of selection array
-    int mSelectionSize;
+    /** Selection array */
+    QBitArray mSelection; // !UPDATE!
 
     // Edit mode is using mNextLid + mNextCidx
     // Next index in cidxFieldIndex to be read in standard mode or next index of line Cats in editing mode
@@ -126,15 +136,8 @@ class QgsGrassFeatureIterator : public QgsAbstractFeatureIteratorFromSource<QgsG
     // Next topology line/node id to be read in topo mode or next line id in edit mode, starts from 1
     int mNextLid;
 
-
     /** Reset selection */
-    void resetSelection( bool sel );
-
-    /** Allocate sellection array for given map id. The array is large enough for lines or areas
-     *  (bigger from num lines and num areas)
-     *  @param map pointer to map structure
-     */
-    void allocateSelection( struct Map_info *map );
+    void resetSelection( bool value );
 
     //! Mutex that protects GRASS library from parallel access from multiple iterators at once.
     //! The library uses static/global variables in various places when accessing vector data,

@@ -34,15 +34,15 @@ class QgsGrassVectorMap
     bool isFrozen() const { return mFrozen; }
     bool isUpdate() const { return mUpdate; }
     int version() const { return mVersion; }
-    //int numLines() const { return mNumLines; }
+    int oldNumLines() const { return mOldNumLines; }
     // number of instances using this map
     int userCount() const;
     /** Get current number of lines.
      *   @return number of lines */
     int numLines();
 
-    QHash<int, int> oldLids() const { return mEditOldLids; }
-    QHash<int, int> newLids() const { return mEditNewLids; }
+    QHash<int, int> & oldLids() { return mOldLids; }
+    QHash<int, int> & newLids() { return mNewLids; }
     QHash<int, QgsGeometry> & oldGeometries() { return mOldGeometries; }
 
     /** Open GRASS map */
@@ -89,6 +89,9 @@ class QgsGrassVectorMap
      */
     bool attributesOutdated();
 
+    /** Map descripton for debugging */
+    QString toString();
+
   private:
     QgsGrassObject mGrassObject;
     // true if map is open, once the map is closed, valid is set to false and no more used
@@ -112,11 +115,11 @@ class QgsGrassVectorMap
     // Vector layers
     QList<QgsGrassVectorMapLayer*> mLayers;
     // Number of lines in vector before editing started
-    //int mNumLines;
+    int mOldNumLines;
     // Original line ids of rewritten GRASS lines (new lid -> old lid)
-    QHash<int, int> mEditOldLids;
+    QHash<int, int> mOldLids;
     // Current line ids for old line ids (old lid -> new lid)
-    QHash<int, int> mEditNewLids;
+    QHash<int, int> mNewLids;
     // hash of rewritten (deleted) features
     //QHash<int,QgsFeature> mChangedFeatures;
     // Hash of original lines' geometries of lines which were changed, keys are GRASS lid

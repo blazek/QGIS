@@ -66,18 +66,24 @@ class QgsGrassEditRenderer : public QgsFeatureRendererV2
 
     virtual QString dump() const override;
 
-    QgsCategorizedSymbolRendererV2 *lineRenderer() const { return mLineRenderer; }
-    QgsCategorizedSymbolRendererV2 *pointRenderer() const { return mPointRenderer; }
+    QgsFeatureRendererV2 *lineRenderer() const { return mLineRenderer; }
+    QgsFeatureRendererV2 *pointRenderer() const { return mMarkerRenderer; }
 
-    void setLineRenderer( QgsCategorizedSymbolRendererV2 *renderer ) { mLineRenderer = renderer; }
-    void setPointRenderer( QgsCategorizedSymbolRendererV2 *renderer ) { mPointRenderer = renderer; }
+    void setLineRenderer( QgsFeatureRendererV2 *renderer );
+    void setMarkerRenderer( QgsFeatureRendererV2 *renderer );
+
+    virtual QDomElement save( QDomDocument& doc ) override;
+
+    static QgsFeatureRendererV2* create( QDomElement& element );
 
   protected:
     //QScopedPointer<QgsSymbolV2> mSymboLine;
 
     //QgsSingleSymbolRendererV2 *mLineRenderer;
-    QgsCategorizedSymbolRendererV2 *mLineRenderer;
-    QgsCategorizedSymbolRendererV2 *mPointRenderer;
+    QgsFeatureRendererV2 *mLineRenderer;
+    QgsFeatureRendererV2 *mMarkerRenderer;
+    //QMap<QgsSymbolV2::SymbolType,QgsFeatureRendererV2*> mRenderers;
+
 };
 
 class GUI_EXPORT QgsGrassEditRendererWidget : public QgsRendererV2Widget
