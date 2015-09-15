@@ -479,6 +479,7 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
     void bufferGeometryChanged( QgsFeatureId fid, QgsGeometry &geom );
     void onBeforeCommitChanges();
     void onEditingStopped();
+    void onUndoIndexChanged( int index );
 
   private:
     struct Map_info * map();

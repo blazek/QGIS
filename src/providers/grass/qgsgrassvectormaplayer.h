@@ -60,7 +60,6 @@ class QgsGrassVectorMapLayer
     QDateTime mLastLoaded;
     // number of instances using this layer
     int mUsers;
-
 };
 
 #endif // QGSGRASSVECTORMAPLAYER_H

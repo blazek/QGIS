@@ -19,6 +19,8 @@
 
 #include <QDateTime>
 
+#include "qgsabstractgeometryv2.h"
+
 #include "qgsgrass.h"
 #include "qgsgrassvectormaplayer.h"
 
@@ -32,7 +34,7 @@ class QgsGrassVectorMap
     struct Map_info *map() { return mMap; }
     bool isValid() const { return mValid; }
     bool isFrozen() const { return mFrozen; }
-    bool isUpdate() const { return mUpdate; }
+    bool isEdited() const { return mIsEdited; }
     int version() const { return mVersion; }
     int oldNumLines() const { return mOldNumLines; }
     // number of instances using this map
@@ -40,10 +42,26 @@ class QgsGrassVectorMap
     /** Get current number of lines.
      *   @return number of lines */
     int numLines();
+    // 3D map with z coordinates
+    bool is3d() { return mIs3d; }
+
+    // Lock open / close
+    static void lockOpenClose();
+    static void unlockOpenClose();
+
+    // Lock reading and writing
+    void lockReadWrite();
+    void unlockReadWrite();
 
     QHash<int, int> & oldLids() { return mOldLids; }
     QHash<int, int> & newLids() { return mNewLids; }
-    QHash<int, QgsGeometry> & oldGeometries() { return mOldGeometries; }
+    QHash<int, QgsAbstractGeometryV2*> & oldGeometries() { return mOldGeometries; }
+
+    /** Get geometry of line.
+     * @return geometry (point,line or polygon(GV_FACE)) or 0 */
+    QgsAbstractGeometryV2 * lineGeometry( int id );
+    QgsAbstractGeometryV2 * nodeGeometry( int id );
+    QgsAbstractGeometryV2 * areaGeometry( int id );
 
     /** Open GRASS map */
     bool open();
@@ -99,7 +117,7 @@ class QgsGrassVectorMap
     // Vector temporally disabled. Necessary for GRASS Tools on Windows
     bool mFrozen;
     // true if the map is opened in update mode
-    bool mUpdate;
+    bool mIsEdited;
     // number layers using this map
     //int  mUsers;
     // version, increased by each closeEdit() and updateMap()
@@ -112,6 +130,8 @@ class QgsGrassVectorMap
     // when attributes are changed
     // map header
     struct  Map_info *mMap;
+    // Is 3D, has z coordinates
+    bool mIs3d;
     // Vector layers
     QList<QgsGrassVectorMapLayer*> mLayers;
     // Number of lines in vector before editing started
@@ -123,9 +143,15 @@ class QgsGrassVectorMap
     // hash of rewritten (deleted) features
     //QHash<int,QgsFeature> mChangedFeatures;
     // Hash of original lines' geometries of lines which were changed, keys are GRASS lid
-    QHash<int, QgsGeometry> mOldGeometries;
+    QHash<int, QgsAbstractGeometryV2*> mOldGeometries;
     /** Open vector maps */
     static QList<QgsGrassVectorMap*> mMaps;
+
+    // Mutex used to avoid concurrent read/write, used only in editing mode
+    QMutex mReadWriteMutex;
+
+    // Lock used when opening closing maps and layers
+    static QMutex mOpenCloseMutex;
 };
 
 #endif // QGSGRASSVECTORMAP_H
