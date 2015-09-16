@@ -16,19 +16,18 @@
 #ifndef QGSGRASSPROVIDER_H
 #define QGSGRASSPROVIDER_H
 
+#include <QDateTime>
+
+#include "qgsvectordataprovider.h"
+
+#include "qgsgrassvectormap.h"
+#include "qgsgrassvectormaplayer.h"
+
 class QgsFeature;
 class QgsField;
 class QgsVectorLayerEditBuffer;
 
 class QgsGrassFeatureIterator;
-
-#include <QDateTime>
-
-#include "qgsvectordataprovider.h"
-#include <vector>
-
-#include "qgsgrassvectormap.h"
-#include "qgsgrassvectormaplayer.h"
 
 /* Update.
  * Vectors are updated (reloaded) if:
@@ -47,16 +46,6 @@ class QgsGrassFeatureIterator;
  * Because open file cannot be deleted on Windows it is necessary to
  * close output vector from GRASS tools before a module is run.
  * This is not however solution for multiple instances of QGIS.
- */
-
-/* Editing.
- * If editing is started by startEdit, vector map is reopened in update mode, and GMAP.update
- * is set to true. All data loaded from the map to QgsGrassProvider remain unchanged
- * untill closeEdit is called.
- * During editing:
- * nextFeature() and getFirstFeature() returns 0
- * featureCount() returns 0
- * fieldCount() returns original (old) number of fields
  */
 
 /**
@@ -427,34 +416,10 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
      */
     static int grassLayerType( QString );
 
-    /** Return a provider name
-
-    Essentially just returns the provider key.  Should be used to build file
-    dialogs so that providers can be shown with their supported types. Thus
-    if more than one provider supports a given format, the user is able to
-    select a specific provider to open that file.
-
-    @note
-
-    Instead of being pure virtual, might be better to generalize this
-    behavior and presume that none of the sub-classes are going to do
-    anything strange with regards to their name or description?
-
-    */
+    /** Return a provider name */
     QString name() const override;
 
-
-    /** Return description
-
-    Return a terse string describing what the provider is.
-
-    @note
-
-    Instead of being pure virtual, might be better to generalize this
-    behavior and presume that none of the sub-classes are going to do
-    anything strange with regards to their name or description?
-
-    */
+    /** Return description */
     QString description() const override;
 
     // Layer type (layerType)
@@ -473,33 +438,41 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
       TOPO_NODE    // topology nodes
     };
 
-
-
   public slots:
     void bufferGeometryChanged( QgsFeatureId fid, QgsGeometry &geom );
     void onBeforeCommitChanges();
     void onEditingStopped();
     void onUndoIndexChanged( int index );
 
+  protected:
+    // used by QgsGrassFeatureSource
+    QgsGrassVectorMapLayer *openLayer() const;
+
   private:
     struct Map_info * map();
     void setMapset();
 
     QgsGrassObject mGrassObject;
-    int     mLayerField;    // field part of layer or -1 if no field specified
-    int     mLayerType;     // layer type POINT, LINE, ...
-    int     mGrassType;     // grass feature type: GV_POINT, GV_LINE | GV_BOUNDARY, GV_AREA,
-    // ( GV_BOUNDARY, GV_CENTROID )
-    QGis::WkbType mQgisType;// WKBPoint, WKBLineString, ...
-    QString mLayerName;         // layer name
+    // field part of layer or -1 if no field specified
+    int mLayerField;
+    // layer type POINT, LINE, ...
+    int mLayerType;
+    // grass feature type: GV_POINT, GV_LINE | GV_BOUNDARY, GV_AREA, ( GV_BOUNDARY, GV_CENTROID )
+    int mGrassType;
+    // WKBPoint, WKBLineString, ...
+    QGis::WkbType mQgisType;
+    QString mLayerName;
     QgsGrassVectorMapLayer *mLayer;
-    int     mMapVersion;    // The version of the map for which the instance was last time updated
+    // The version of the map for which the instance was last time updated
+    int mMapVersion;
 
-    int     mCidxFieldIndex;    // !UPDATE! Index for layerField in category index or -1 if no such field
-    int     mCidxFieldNumCats;  // !UPDATE! Number of records in field index
+    // Index for layerField in category index or -1 if no such field
+    int mCidxFieldIndex;
+    // Number of records in field index
+    int mCidxFieldNumCats;
 
-    bool    mValid;                // !UPDATE!
-    long    mNumberFeatures;       // !UPDATE!
+    bool mValid;
+    long mNumberFeatures;
 
     // create QgsFeatureId from GRASS geometry object id and cat
     static QgsFeatureId makeFeatureId( int grassId, int cat );

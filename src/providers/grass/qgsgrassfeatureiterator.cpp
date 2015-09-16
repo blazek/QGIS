@@ -69,10 +69,12 @@ void copy_boxlist_and_destroy( struct boxlist *blist, struct ilist * list )
 
 QgsGrassFeatureIterator::QgsGrassFeatureIterator( QgsGrassFeatureSource* source, bool ownSource, const QgsFeatureRequest& request )
     : QgsAbstractFeatureIteratorFromSource<QgsGrassFeatureSource>( source, ownSource, request )
+    , mCanceled( false )
     , mNextCidx( 0 )
     , mNextLid( 1 )
 {
   QgsDebugMsg( "entered" );
+
   // WARNING: the iterater cannot use mutex lock for its whole life, because QgsVectorLayerFeatureIterator is opening
   // multiple iterators if features are edited -> lock only critical sections
 
@@ -90,11 +92,41 @@ QgsGrassFeatureIterator::QgsGrassFeatureIterator( QgsGrassFeatureSource* source,
     //no filter - use all features
     mSelection.fill( true );
   }
+
+  connect( mSource->mLayer->map(), SIGNAL( cancelIterators() ), this, SLOT( cancel() ), Qt::DirectConnection );
+
+  Qt::ConnectionType connectionType = Qt::DirectConnection;
+  if ( mSource->mLayer->map()->thread() != thread() )
+  {
+    // Using BlockingQueuedConnection may be dangerous, if the iterator was later moved to maps thread, it would cause dead lock on emit closeIterators()
+    QgsDebugMsg( "map and iterator are on different threads -> connect closeIterators() with BlockingQueuedConnection" );
+    connectionType = Qt::BlockingQueuedConnection;
+  }
+  connect( mSource->mLayer->map(), SIGNAL( closeIterators() ), this, SLOT( doClose() ), connectionType );
+}
+
+QgsGrassFeatureIterator::~QgsGrassFeatureIterator()
+{
+  close();
+}
+
+void QgsGrassFeatureIterator::cancel()
+{
+  QgsDebugMsg( "cancel" );
+  mCanceled = true;
+}
+
+void QgsGrassFeatureIterator::doClose()
+{
+  QgsDebugMsg( "doClose" );
+  close();
 }
 
 void QgsGrassFeatureIterator::setSelectionRect( const QgsRectangle& rect, bool useIntersect )
 {
   QgsDebugMsg( QString( "useIntersect = %1 rect = %2" ).arg( useIntersect ).arg( rect.toString() ) );
+
+  // TODO: selection of edited lines
 
   // Lock because functions using static/global variables are used
   // (e.g. static LocList in Vect_select_lines_by_box, global BranchBuf in RTreeGetBranches)
@@ -192,16 +224,17 @@ void QgsGrassFeatureIterator::setSelectionRect( const QgsRectangle& rect, bool u
   QgsGrass::unlock();
 }
 
-QgsGrassFeatureIterator::~QgsGrassFeatureIterator()
-{
-  close();
-}
-
 bool QgsGrassFeatureIterator::fetchFeature( QgsFeature& feature )
 {
   QgsDebugMsgLevel( "entered", 3 );
   if ( mClosed )
   {
+    return false;
+  }
+  if ( mCanceled )
+  {
+    QgsDebugMsg( "iterator is canceled -> close" );
+    close();
     return false;
   }
 
@@ -225,15 +258,15 @@ bool QgsGrassFeatureIterator::fetchFeature( QgsFeature& feature )
     }
   }
 
-  //int found = 0;
   if ( filterById )
   {
     featureId = mRequest.filterFid();
     lid = lidFormFid( mRequest.filterFid() );
+
     if ( mSource->mLayer->map()->newLids().contains( lid ) )
     {
-      lid = mSource->mLayer->map()->newLids().value( mNextLid );
-      QgsDebugMsg( QString( "line %1 rewritten -> realLid = %2" ).arg( lidFormFid( mRequest.filterFid() ) ).arg( lid ) );
+      lid = mSource->mLayer->map()->newLids().value( lid );
+      QgsDebugMsg( QString( "line %1 rewritten -> real lid = %2" ).arg( lidFormFid( mRequest.filterFid() ) ).arg( lid ) );
     }
     if ( !Vect_line_alive( mSource->map(), lid ) )
     {
@@ -480,7 +513,7 @@ bool QgsGrassFeatureIterator::fetchFeature( QgsFeature& feature )
       int nlines = Vect_get_node_n_lines( mSource->map(), lid );
       for ( int i = 0; i < nlines; i++ )
       {
-        int line = Vect_get_node_line( mSource->map(), lid, i );
+        int line = Vect_get_node_line( mSource->map(), lid, i );  QgsDebugMsg( "cancel" );
         if ( i > 0 ) lines += ",";
         lines += QString::number( line );
       }
@@ -695,13 +728,10 @@ void QgsGrassFeatureIterator::setFeatureAttributes( int cat, QgsFeature *feature
   }
 }
 
-//void QgsGrassFeatureIterator::lock()
-//{
-//}
-
 //  ------------------ QgsGrassFeatureSource ------------------
 QgsGrassFeatureSource::QgsGrassFeatureSource( const QgsGrassProvider* p )
-    : mLayerType( p->mLayerType )
+    : mLayer( p->openLayer() )
+    , mLayerType( p->mLayerType )
     , mGrassType( p->mGrassType )
     , mQgisType( p->mQgisType )
     , mCidxFieldIndex( p->mCidxFieldIndex )
@@ -709,10 +739,7 @@ QgsGrassFeatureSource::QgsGrassFeatureSource( const QgsGrassProvider* p )
     , mFields( p->fields() )
     , mEncoding( p->mEncoding )
     , mEditing( p->mEditBuffer )
-    //, mEditFids( p->mEditFids )
-    //, mChangedFeatures( p->mChangedFeatures )
 {
-  mLayer = QgsGrassVectorMap::openLayer( p->grassObject(), p->mLayerField );
 
   Q_ASSERT( mLayer );
 #if 0
@@ -726,7 +753,7 @@ QgsGrassFeatureSource::QgsGrassFeatureSource( const QgsGrassProvider* p )
 
 QgsGrassFeatureSource::~QgsGrassFeatureSource()
 {
-  QgsGrassVectorMap::closeLayer( mLayer );
+  mLayer->close();
 }
 
 QgsFeatureIterator QgsGrassFeatureSource::getFeatures( const QgsFeatureRequest& request )

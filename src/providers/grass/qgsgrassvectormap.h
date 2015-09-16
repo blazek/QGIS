@@ -18,14 +18,16 @@
 #define QGSGRASSVECTORMAP_H
 
 #include <QDateTime>
+#include <QObject>
 
 #include "qgsabstractgeometryv2.h"
 
 #include "qgsgrass.h"
 #include "qgsgrassvectormaplayer.h"
 
-class QgsGrassVectorMap
+class QgsGrassVectorMap : public QObject
 {
+    Q_OBJECT
   public:
     QgsGrassVectorMap( const QgsGrassObject & grassObject );
     ~QgsGrassVectorMap();
@@ -46,8 +48,12 @@ class QgsGrassVectorMap
     bool is3d() { return mIs3d; }
 
     // Lock open / close
-    static void lockOpenClose();
-    static void unlockOpenClose();
+    void lockOpenClose();
+    void unlockOpenClose();
+
+    // Lock open / close
+    void lockOpenCloseLayer();
+    void unlockOpenCloseLayer();
 
     // Lock reading and writing
     void lockReadWrite();
@@ -63,16 +69,17 @@ class QgsGrassVectorMap
     QgsAbstractGeometryV2 * nodeGeometry( int id );
     QgsAbstractGeometryV2 * areaGeometry( int id );
 
-    /** Open GRASS map */
+    /** Open map if not yet open. Open/close lock */
     bool open();
 
-    /** Close GRASS map */
+    /** Close map. All iterators are closed first. Open/close lock. */
     void close();
 
-    /** Open map.
-     *  @param grassObject
-     *  @return pointer to map or 0 */
-    static QgsGrassVectorMap * openMap( const QgsGrassObject & grassObject );
+    /** Open GRASS map, no open/close locking */
+    bool openMap();
+
+    /** Close GRASS map, no open/close locking */
+    void closeMap();
 
     bool startEdit();
     bool closeEdit( bool newMap );
@@ -82,16 +89,10 @@ class QgsGrassVectorMap
      *  @return pointer to layer or 0 if layer doe not exist */
     QgsGrassVectorMapLayer * openLayer( int field );
 
-    /** Open layer.
-     *  @param grassObject
-     *  @param field
-     *  @return pointer to layer or 0 */
-    static QgsGrassVectorMapLayer * openLayer( const QgsGrassObject & grassObject, int field );
-
     /** Close layer and release cached data if there are no more users and close map
      *  if there are no more map users.
      *  @param layer */
-    static void closeLayer( QgsGrassVectorMapLayer * layer );
+    void closeLayer( QgsGrassVectorMapLayer * layer );
 
     /** Update map. Close and reopen vector and refresh layers.
      *  Instances of QgsGrassProvider are not updated and should call update() method */
@@ -110,16 +111,27 @@ class QgsGrassVectorMap
     /** Map descripton for debugging */
     QString toString();
 
+  signals:
+    /** Ask all iterators to cancel iteration when possible. Connected to iterators with
+     * Qt::DirectConnection (non blocking) */
+    void cancelIterators();
+
+    /** Close all iterators. Connected to iterators in different threads with Qt::BlockingQueuedConnection */
+    void closeIterators();
+
   private:
+    /** Close iterators, blocking */
+    void closeAllIterators();
+
     QgsGrassObject mGrassObject;
     // true if map is open, once the map is closed, valid is set to false and no more used
     bool mValid;
+    // Indicates if map is open, it may be open but invalide
+    bool mOpen;
     // Vector temporally disabled. Necessary for GRASS Tools on Windows
     bool mFrozen;
     // true if the map is opened in update mode
     bool mIsEdited;
-    // number layers using this map
-    //int  mUsers;
     // version, increased by each closeEdit() and updateMap()
     int mVersion;
     // last modified time of the vector directory, when the map was opened
@@ -140,18 +152,38 @@ class QgsGrassVectorMap
     QHash<int, int> mOldLids;
     // Current line ids for old line ids (old lid -> new lid)
     QHash<int, int> mNewLids;
-    // hash of rewritten (deleted) features
-    //QHash<int,QgsFeature> mChangedFeatures;
     // Hash of original lines' geometries of lines which were changed, keys are GRASS lid
     QHash<int, QgsAbstractGeometryV2*> mOldGeometries;
-    /** Open vector maps */
-    static QList<QgsGrassVectorMap*> mMaps;
 
     // Mutex used to avoid concurrent read/write, used only in editing mode
     QMutex mReadWriteMutex;
 
-    // Lock used when opening closing maps and layers
-    static QMutex mOpenCloseMutex;
+    // Open / close mutex
+    QMutex mOpenCloseMutex;
+
+    // Open / close mutex
+    QMutex mOpenCloseLayerMutex;
+};
+
+class QgsGrassVectorMapStore
+{
+  public:
+    QgsGrassVectorMapStore();
+    ~QgsGrassVectorMapStore();
+
+    static QgsGrassVectorMapStore *instance();
+
+    /** Open map.
+     *  @param grassObject
+     *  @return map, the map may be invalide  */
+    QgsGrassVectorMap * openMap( const QgsGrassObject & grassObject );
+
+  private:
+    /** Open vector maps */
+    QList<QgsGrassVectorMap*> mMaps;
+
+    // Lock open/close map
+    QMutex mMutex;
 };
 
 #endif // QGSGRASSVECTORMAP_H

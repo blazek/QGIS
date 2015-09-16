@@ -308,3 +308,10 @@ void QgsGrassVectorMapLayer::removeUser()
   mUsers--;
   QgsDebugMsg( QString( "user removed mUsers = %1" ).arg( mUsers ) );
 }
+
+void QgsGrassVectorMapLayer::close()
+{
+  QgsDebugMsg( "close" );
+  //removeUser(); // removed by map
+  mMap->closeLayer( this );
+}

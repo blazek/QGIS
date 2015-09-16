@@ -42,12 +42,10 @@ extern "C"
 #endif
 }
 
-QMutex QgsGrassVectorMap::mOpenCloseMutex;
-QList<QgsGrassVectorMap*> QgsGrassVectorMap::mMaps;
-
 QgsGrassVectorMap::QgsGrassVectorMap( const QgsGrassObject & grassObject )
     : mGrassObject( grassObject )
     , mValid( false )
+    , mOpen( false )
     , mFrozen( false )
     , mIsEdited( false )
     , mVersion( 0 )
@@ -56,7 +54,8 @@ QgsGrassVectorMap::QgsGrassVectorMap( const QgsGrassObject & grassObject )
     , mOldNumLines( 0 )
 {
   QgsDebugMsg( "grassObject = " + grassObject.toString() );
-  open();
+  openMap();
+  mOpen = true;
 }
 
 QgsGrassVectorMap::~QgsGrassVectorMap()
@@ -78,9 +77,39 @@ int QgsGrassVectorMap::userCount() const
 
 bool QgsGrassVectorMap::open()
 {
+  QgsDebugMsg( toString() );
+  if ( mOpen )
+  {
+    QgsDebugMsg( "already open" );
+    return true;
+  }
+  lockOpenClose();
+  bool result = openMap();
+  mOpen = true;
+  unlockOpenClose();
+  return result;
+}
+
+void QgsGrassVectorMap::close()
+{
+  QgsDebugMsg( toString() );
+  if ( mOpen )
+  {
+    QgsDebugMsg( "is not open" );
+    return;
+  }
+  lockOpenClose();
+  closeAllIterators(); // blocking
+  closeMap();
+  mOpen = false;
+  unlockOpenClose();
+  return;
+}
+
+bool QgsGrassVectorMap::openMap()
+{
   // TODO: refresh layers (reopen)
   QgsDebugMsg( toString() );
-  QgsGrass::init();
   QgsGrass::lock();
   QgsGrass::setLocation( mGrassObject.gisdbase(), mGrassObject.location() );
 
@@ -176,35 +205,16 @@ bool QgsGrassVectorMap::open()
   return true;
 }
 
-
-/* returns mapId or -1 on error */
-QgsGrassVectorMap * QgsGrassVectorMap::openMap( const QgsGrassObject & grassObject )
-{
-  QgsDebugMsg( "grassObject = " + grassObject.toString() );
-
-  lockOpenClose();
-  // Check if this map is already opened
-  foreach ( QgsGrassVectorMap *map, mMaps )
-  {
-    if ( map->grassObject() == grassObject )
-    {
-      QgsDebugMsg( "The map is already open" );
-      unlockOpenClose();
-      return map;
-    }
-  }
-
-  QgsGrassVectorMap *map = new QgsGrassVectorMap( grassObject );
-  mMaps << map;
-  unlockOpenClose();
-  return map;
-}
-
 bool QgsGrassVectorMap::startEdit()
 {
   QgsDebugMsg( toString() );
 
   lockOpenClose();
+
+  closeAllIterators(); // blocking
+
+  // TODO: Can it still happen? QgsGrassVectorMapStore singleton is used now.
+#if 0
   // Check number of maps (the problem may appear if static variables are not shared - runtime linker)
   if ( mMaps.size() == 0 )
   {
@@ -212,6 +222,7 @@ bool QgsGrassVectorMap::startEdit()
                           "static variables are not shared by provider and plugin." );
     return false;
   }
+#endif
 
   /* Close map */
   mValid = false;
@@ -260,7 +271,7 @@ bool QgsGrassVectorMap::startEdit()
     }
     QgsGrass::unlock();
     unlockOpenClose();
-    return false;lockOpenClose();
+    return false;
   }
   Vect_set_category_index_update( mMap );
 
@@ -286,9 +297,11 @@ bool QgsGrassVectorMap::closeEdit( bool newMap )
     return false;
   }
 
-  // mValid = false; cloes() is checking mValid
+  // mValid = false; // close() is checking mValid
 
   lockOpenClose();
+  closeAllIterators(); // blocking
+
   QgsGrass::lock();
   mOldLids.clear();
   mNewLids.clear();
@@ -324,59 +337,49 @@ bool QgsGrassVectorMap::closeEdit( bool newMap )
 #endif
 
   mIsEdited = false;
-  QgsGrass::unlock();
-  unlockOpenClose();
-  // We do not need to reopen
-  close();
-  open();
+  QgsGrass::unlock();closeAllIterators(); // blocking
+
+  closeMap();
+  openMap();
   mVersion++;
+  unlockOpenClose();
+
   QgsDebugMsg( "edit closed" );
   return mValid;
 }
 
 QgsGrassVectorMapLayer * QgsGrassVectorMap::openLayer( int field )
 {
-  QgsDebugMsg( "entered" );
+  QgsDebugMsg( QString( "%1 field = %2" ).arg( toString() ).arg( field ) );
 
+  // There are 2 locks on openLayer(), it must be locked when the map is being opened/closed/updated
+  // but that lock must not block closeLayer() because close/update map closes first all iterators
+  // which call closeLayer() and using single lock would result in dead lock.
+
+  lockOpenCloseLayer();
   lockOpenClose();
+  QgsGrassVectorMapLayer *layer = 0;
   // Check if this layer is already open
-  foreach ( QgsGrassVectorMapLayer *layer, mLayers )
+  foreach ( QgsGrassVectorMapLayer *l, mLayers )
   {
-    if ( !layer->isValid() )
-    {
-      continue;
-    }
-
-    if ( layer->field() == field )
+    if ( l->field() == field )
     {
       QgsDebugMsg( "Layer exists" );
-      layer->addUser();
-      unlockOpenClose();
-      return layer;
+      layer = l;
     }
   }
 
-  QgsGrassVectorMapLayer *layer = new QgsGrassVectorMapLayer( this, field ) ;
-  layer->load();
-  mLayers << layer;
-  layer->addUser();
-  unlockOpenClose();
-  return layer;
-}
-
-QgsGrassVectorMapLayer * QgsGrassVectorMap::openLayer( const QgsGrassObject & grassObject, int field )
-{
-  QgsDebugMsg( QString( "grassObject = %1 field = %2" ).arg( grassObject.toString() ).arg( field ) );
-
-  QgsGrassVectorMap * map = openMap( grassObject );
-
-  if ( !map )
+  if ( !layer )
   {
-    QgsDebugMsg( "cannot open the map" );
-    return 0;
+    layer = new QgsGrassVectorMapLayer( this, field ) ;
+    layer->load();
+    mLayers << layer;
   }
 
-  return map->openLayer( field );
+  layer->addUser();
+  unlockOpenClose();
+  unlockOpenCloseLayer();
+  return layer;
 }
 
 void QgsGrassVectorMap::closeLayer( QgsGrassVectorMapLayer * layer )
@@ -386,9 +389,9 @@ void QgsGrassVectorMap::closeLayer( QgsGrassVectorMapLayer * layer )
     return;
   }
 
-  QgsDebugMsg( QString( "Close layer %1 usersCount = %2" ).arg( layer->map()->grassObject().toString() )
-               .arg( layer->userCount() ) );
+  QgsDebugMsg( QString( "Close layer %1 usersCount = %2" ).arg( toString() ).arg( layer->userCount() ) );
 
+  lockOpenCloseLayer();
   layer->removeUser();
 
   if ( layer->userCount() == 0 )   // No more users, free sources
@@ -399,17 +402,17 @@ void QgsGrassVectorMap::closeLayer( QgsGrassVectorMapLayer * layer )
   if ( layer->map()->userCount() == 0 )
   {
     QgsDebugMsg( "No more map users -> close" );
-    layer->map()->close();
+    // TODO: attention about dead lock, probably move to QgsGrassVectorMapStore
+    //layer->map()->close();
   }
 
   QgsDebugMsg( "layer closed" );
+  unlockOpenCloseLayer();
 }
 
-void QgsGrassVectorMap::close()
+void QgsGrassVectorMap::closeMap()
 {
-
   QgsDebugMsg( toString() );
-  lockOpenClose();
   QgsGrass::lock();
   if ( !mValid )
   {
@@ -435,16 +438,16 @@ void QgsGrassVectorMap::close()
   mOldNumLines = 0;
   mValid = false;
   QgsGrass::unlock();
-  unlockOpenClose();
 }
 
 void QgsGrassVectorMap::update()
 {
   QgsDebugMsg( toString() );
-
-  // Close and reopen
-  close();
-  open();
+  lockOpenClose();
+  closeAllIterators(); // blocking
+  closeMap();
+  openMap();
+  unlockOpenClose();
 }
 
 bool QgsGrassVectorMap::mapOutdated()
@@ -508,6 +511,18 @@ void QgsGrassVectorMap::unlockOpenClose()
 {
   QgsDebugMsg( "unlockOpenClose" );
   mOpenCloseMutex.unlock();
+}
+
+void QgsGrassVectorMap::lockOpenCloseLayer()
+{
+  QgsDebugMsg( "lockOpenCloseLayer" );
+  mOpenCloseLayerMutex.lock();
+}
+
+void QgsGrassVectorMap::unlockOpenCloseLayer()
+{
+  QgsDebugMsg( "unlockOpenCloseLayer" );
+  mOpenCloseLayerMutex.unlock();
 }
 
 void QgsGrassVectorMap::lockReadWrite()
@@ -616,3 +631,55 @@ QgsAbstractGeometryV2 * QgsGrassVectorMap::areaGeometry( int id )
   return polygon;
 }
 
+void QgsGrassVectorMap::closeAllIterators()
+{
+  QgsDebugMsg( toString() );
+  // cancel and close all iterator
+  // Iterators must be connected properly, otherwise may it result in dead lock!
+  emit cancelIterators(); // non blocking
+  emit closeIterators(); // blocking
+  QgsDebugMsg( "iterators closed" );
+}
+
+//------------------------------------ QgsGrassVectorMapStore ------------------------------------
+QgsGrassVectorMapStore::QgsGrassVectorMapStore()
+{
+}
+
+QgsGrassVectorMapStore::~QgsGrassVectorMapStore()
+{
+  QgsDebugMsg( "entered" );
+}
+
+QgsGrassVectorMapStore *QgsGrassVectorMapStore::instance()
+{
+  static QgsGrassVectorMapStore instance;
+  return &instance;
+}
+
+QgsGrassVectorMap * QgsGrassVectorMapStore::openMap( const QgsGrassObject & grassObject )
+{
+  QgsDebugMsg( "grassObject = " + grassObject.toString() );
+
+  mMutex.lock();
+  QgsGrassVectorMap *map = 0;
+
+  // Check if this map is already open
+  foreach ( QgsGrassVectorMap *m, mMaps )
+  {
+    if ( m->grassObject() == grassObject )
+    {
+      QgsDebugMsg( "The map is already open" );
+      map = m;
+    }
+  }
+
+  if ( !map )
+  {
+    map = new QgsGrassVectorMap( grassObject );
+    mMaps << map;
+  }
+
+  mMutex.unlock();
+  return map;
+}

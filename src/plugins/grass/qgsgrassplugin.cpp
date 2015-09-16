@@ -36,6 +36,7 @@
 #include "qgsmaplayerstylemanager.h"
 #include "qgsrubberband.h"
 #include "qgsproject.h"
+#include "qgsproviderregistry.h"
 #include "qgsrendererv2registry.h"
 #include "qgsvectorlayer.h"
 #include "qgsmaplayerregistry.h"
@@ -282,7 +283,7 @@ void QgsGrassPlugin::onEditingStarted()
   else
   {
     QgsDebugMsg( "create and set style " + editStyleName );
-    vectorLayer->styleManager()->addStyleFromLayer( editStyleName ); // there seems no
+    vectorLayer->styleManager()->addStyleFromLayer( editStyleName );
 
     //vectorLayer->styleManager()->addStyle( editStyleName, QgsMapLayerStyle() );
     vectorLayer->styleManager()->setCurrentStyle( editStyleName );
@@ -583,14 +584,6 @@ void QgsGrassPlugin::projectRead()
 void QgsGrassPlugin::newProject()
 {
   QgsDebugMsg( "entered" );
-  // debug
-  // activating edit tools by activating layer does not work if layer is loaded from project
-  QgsVectorLayer* vectorLayer = qGisInterface->addVectorLayer( "/home/radim/gdata/grass-plugin/world_location_4326/edit/simple/1_line", "line", "grass" );
-  if ( vectorLayer )
-  {
-    vectorLayer->startEditing();
-    qGisInterface->setActiveLayer( vectorLayer );
-  }
 }
 
 // Unload the plugin by cleaning up the GUI

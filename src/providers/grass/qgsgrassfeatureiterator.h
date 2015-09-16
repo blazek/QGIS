@@ -48,31 +48,28 @@ class QgsGrassFeatureSource : public QgsAbstractFeatureSource
     };
 #endif
 
-    struct Map_info* map();
-    //QgsGrassProvider *mProvider;
-    //struct Map_info* mMap;
-    int     mLayerType;     // layer type POINT, LINE, ...
-    int     mGrassType;     // grass feature type: GV_POINT, GV_LINE | GV_BOUNDARY, GV_AREA,
-    QgsGrassVectorMapLayer * mLayer;
-    QGis::WkbType mQgisType;// WKBPoint, WKBLineString, ...
 
-    int    mCidxFieldIndex;    // !UPDATE! Index for layerField in category index or -1 if no such field
-    int    mCidxFieldNumCats;  // !UPDATE! Number of records in field index
+    struct Map_info* map();
+    QgsGrassVectorMapLayer * mLayer;
+    int mLayerType;     // layer type POINT, LINE, ...
+    int mGrassType;     // grass feature type: GV_POINT, GV_LINE | GV_BOUNDARY, GV_AREA,
+
+    QGis::WkbType mQgisType; // WKBPoint, WKBLineString, ...
+
+    int mCidxFieldIndex;    // !UPDATE! Index for layerField in category index or -1 if no such field
+    int mCidxFieldNumCats;  // !UPDATE! Number of records in field index
 
     QgsFields mFields;
     QTextCodec* mEncoding;
 
     bool mEditing; // Standard QGIS editing mode
-    // TODO: probably keep fid mapping in provider?
-    //QHash<int,int> mEditFids;
-    //QHash<int,QgsFeature> mChangedFeatures;
-
     friend class QgsGrassFeatureIterator;
 };
 
 
-class QgsGrassFeatureIterator : public QgsAbstractFeatureIteratorFromSource<QgsGrassFeatureSource>
+class QgsGrassFeatureIterator : public QObject, public QgsAbstractFeatureIteratorFromSource<QgsGrassFeatureSource>
 {
+    Q_OBJECT
   public:
     QgsGrassFeatureIterator( QgsGrassFeatureSource* source, bool ownSource, const QgsFeatureRequest& request );
 
@@ -96,14 +93,23 @@ class QgsGrassFeatureIterator : public QgsAbstractFeatureIteratorFromSource<QgsG
     // Get GRASS cat from QGIS fid
     static int catFormFid( QgsFeatureId fid );
 
+  public slots:
+    /** Cancel iterator, iterator will be closed on next occasion, probably when next getFeature() gets called.
+     * This function can be called directly from other threads (setting bool is atomic) */
+    void cancel();
+
+    void doClose();
+
   protected:
     //void lock();
     //void unlock();
 
+    /** Reset selection */
+    void resetSelection( bool value );
+
     void setSelectionRect( const QgsRectangle& rect, bool useIntersect );
 
     void setFeatureGeometry( QgsFeature& feature, int id, int type );
-
 
     /** Set feature attributes.
      *  @param feature
@@ -123,9 +129,8 @@ class QgsGrassFeatureIterator : public QgsAbstractFeatureIteratorFromSource<QgsG
      * @param type geometry type */
     QgsGrassProvider::TopoSymbol topoSymbol( int lid, int type );
 
-    struct line_pnts *mPoints; // points structure
-    struct line_cats *mCats;   // cats structure
-    struct ilist     *mList;
+    /** Canceled -> close when possible */
+    bool mCanceled;
 
     /** Selection array */
     QBitArray mSelection; // !UPDATE!
@@ -136,8 +141,7 @@ class QgsGrassFeatureIterator : public QgsAbstractFeatureIteratorFromSource<QgsG
     // Next topology line/node id to be read in topo mode or next line id in edit mode, starts from 1
     int mNextLid;
 
-    /** Reset selection */
-    void resetSelection( bool value );
+
 
     static QMutex sMutex;
 };

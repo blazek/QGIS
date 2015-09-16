@@ -17,10 +17,18 @@
 #ifndef QGSGRASSVECTORMAPLAYER_H
 #define QGSGRASSVECTORMAPLAYER_H
 
+#include <QDateTime>
+#include <QMap>
+#include <QObject>
+#include <QPair>
+
+#include "qgsfield.h"
+
 class QgsGrassVectorMap;
 
-class QgsGrassVectorMapLayer
+class QgsGrassVectorMapLayer : public QObject
 {
+    Q_OBJECT
   public:
     QgsGrassVectorMapLayer( QgsGrassVectorMap *map, int field );
 
@@ -41,6 +49,9 @@ class QgsGrassVectorMapLayer
 
     /** Clear all cached data */
     void clear();
+
+    /** Decrease number of users and clear if no more users */
+    void close();
 
   private:
 

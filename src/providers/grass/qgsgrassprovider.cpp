@@ -68,10 +68,7 @@ extern "C"
 #undef __STDC__
 #endif
 
-
-
-static QString GRASS_KEY = "grass"; // XXX verify this
-static QString GRASS_DESCRIPTION = "Grass provider"; // XXX verify this
+static QString GRASS_KEY = "grass";
 
 QgsGrassProvider::QgsGrassProvider( QString uri )
     : QgsVectorDataProvider( uri )
@@ -79,6 +76,7 @@ QgsGrassProvider::QgsGrassProvider( QString uri )
     , mLayerType( POINT )
     , mGrassType( 0 )
     , mQgisType( QGis::WKBUnknown )
+    , mLayer( 0 )
     , mMapVersion( 0 )
     , mCidxFieldIndex( -1 )
     , mCidxFieldNumCats( 0 )
@@ -203,11 +201,19 @@ QgsGrassProvider::QgsGrassProvider( QString uri )
       break;
   }
 
-  mLayer = QgsGrassVectorMap::openLayer( mGrassObject, mLayerField );
-
-  if ( !mLayer )
+  // the map may be invalid (e.g. wrong uri or open failed)
+  QgsGrassVectorMap *vectorMap = QgsGrassVectorMapStore::instance()->openMap( mGrassObject );
+  if ( !vectorMap ) // should not happen
   {
-    QgsDebugMsg( QString( "Cannot open GRASS layer:%1" ).arg( myURI ) );
+    QgsDebugMsg( QString( "Cannot open map : %1" ).arg( myURI ) );
+    return;
+  }
+
+  mLayer = vectorMap->openLayer( mLayerField );
+
+  if ( !mLayer ) // should not happen
+  {
+    QgsDebugMsg( QString( "Cannot open GRASS layer : %1" ).arg( myURI ) );
     return;
   }
 
@@ -297,8 +303,7 @@ void QgsGrassProvider::update( void )
 QgsGrassProvider::~QgsGrassProvider()
 {
   QgsDebugMsg( "entered" );
-
-  QgsGrassVectorMap::closeLayer( mLayer );
+  mLayer->close();
 }
 
 
@@ -320,16 +325,17 @@ QgsFeatureIterator QgsGrassProvider::getFeatures( const QgsFeatureRequest& reque
 {
   //if ( isEdited() || isFrozen() || !mValid )
   if ( isFrozen() || !mValid )
+  {
     return QgsFeatureIterator();
+  }
 
   // check if outdated and update if necessary
   ensureUpdated();
 
-  return QgsFeatureIterator( new QgsGrassFeatureIterator( new QgsGrassFeatureSource( this ), true, request ) );
+  QgsGrassFeatureSource * source = new QgsGrassFeatureSource( this );
+  QgsGrassFeatureIterator * iterator = new QgsGrassFeatureIterator( source, true, request );
+  return QgsFeatureIterator( iterator );
 }
-
-
-
 
 QgsRectangle QgsGrassProvider::extent()
 {
@@ -1267,9 +1273,7 @@ void QgsGrassProvider::startEditing( QgsVectorLayer *vectorLayer )
 
 void QgsGrassProvider::bufferGeometryChanged( QgsFeatureId fid, QgsGeometry &geom )
 {
-  // TODO
   int oldLid = QgsGrassFeatureIterator::lidFormFid( fid );
-  //int cat = QgsGrassFeatureIterator::catFormFid ( fid );
   int realLine = oldLid;
   if ( mLayer->map()->newLids().contains( oldLid ) ) // if it was changed already
   {
@@ -1366,6 +1370,11 @@ int QgsGrassProvider::cidxGetMaxCat( int idx )
   return ( cat );
 }
 
+QgsGrassVectorMapLayer * QgsGrassProvider::openLayer() const
+{
+  return mLayer->map()->openLayer( mLayerField );
+}
+
 struct Map_info * QgsGrassProvider::map()
 {
   Q_ASSERT( mLayer );
@@ -1382,10 +1391,10 @@ void QgsGrassProvider::setMapset()
 QString QgsGrassProvider::name() const
 {
   return GRASS_KEY;
-} // QgsGrassProvider::name()
+}
 
 QString QgsGrassProvider::description() const
 {
-  return GRASS_DESCRIPTION;
-} // QgsGrassProvider::description()
+  return tr( "GRASS %1 vector provider" ).arg( GRASS_VERSION_MAJOR );
+}
 

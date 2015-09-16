@@ -24,10 +24,13 @@ MACRO(ADD_GRASSLIB GRASS_BUILD_VERSION)
 
     QT4_WRAP_CPP(GRASS_LIBRARY_MOC_SRCS
       ../qgsgrass.h
+      ../qgsgrassfeatureiterator.h
       ../qgsgrassimport.h
       ../qgsgrassoptions.h
       ../qgsgrassprovider.h
       ../qgsgrassvector.h
+      ../qgsgrassvectormap.h
+      ../qgsgrassvectormaplayer.h
     )
 
     SET (GRASS_LIBRARY_SRCS

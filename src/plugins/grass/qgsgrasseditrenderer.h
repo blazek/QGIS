@@ -17,14 +17,12 @@
 #define QGSGRASSEDITRENDERER_H
 
 #include "qgis.h"
-#include "qgsrendererv2.h"
-//#include "qgssinglesymbolrendererv2.h"
 #include "qgscategorizedsymbolrendererv2.h"
+#include "qgsrendererv2.h"
 #include "qgssymbolv2.h"
-//class QgsSingleSymbolRendererV2;
 
 #include "qgscategorizedsymbolrendererv2.h"
-#include "symbology-ng/qgsrendererv2widget.h"
+#include "qgsrendererv2widget.h"
 
 class QgsGrassEditRenderer : public QgsFeatureRendererV2
 {
@@ -50,8 +48,6 @@ class QgsGrassEditRenderer : public QgsFeatureRendererV2
 
     virtual QgsSymbolV2* symbolForFeature( QgsFeature& feature, QgsRenderContext& context ) override;
 
-    //virtual QgsSymbolV2* originalSymbolForFeature( QgsFeature& feature ) override;
-
     virtual void startRender( QgsRenderContext& context, const QgsFields& fields ) override;
 
     virtual void stopRender( QgsRenderContext& context ) override;
@@ -59,8 +55,6 @@ class QgsGrassEditRenderer : public QgsFeatureRendererV2
     virtual QList<QString> usedAttributes() override;
 
     virtual QgsFeatureRendererV2* clone() const override;
-
-    //virtual int capabilities() override { return SymbolLevels | RotationField; }
 
     virtual QgsSymbolV2List symbols( QgsRenderContext& context ) override;
 
@@ -77,13 +71,8 @@ class QgsGrassEditRenderer : public QgsFeatureRendererV2
     static QgsFeatureRendererV2* create( QDomElement& element );
 
   protected:
-    //QScopedPointer<QgsSymbolV2> mSymboLine;
-
-    //QgsSingleSymbolRendererV2 *mLineRenderer;
     QgsFeatureRendererV2 *mLineRenderer;
     QgsFeatureRendererV2 *mMarkerRenderer;
-    //QMap<QgsSymbolV2::SymbolType,QgsFeatureRendererV2*> mRenderers;
-
 };
 
 class GUI_EXPORT QgsGrassEditRendererWidget : public QgsRendererV2Widget
