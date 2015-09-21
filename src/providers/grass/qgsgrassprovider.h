@@ -332,57 +332,6 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
      */
     int dbLinkField( int link );
 
-    /** Execute SQL statement
-     *   @param field
-     *   @param sql
-     *   @return empty string or error message
-     */
-    QString executeSql( int field, const QString &sql );
-
-    /** Update attributes
-     *   @param field
-     *   @param cat
-     *   @param update comma separated update string, e.g.: col1 = 5, col2 = 'Val d''Aosta'
-     *   @return empty string or error messagemLayer
-     */
-    QString updateAttributes( int field, int cat, const QString &values );
-
-    /** Insert new attributes to the table (it does not check if attributes already exists)
-     *   @param field
-     *   @param cat
-     *   @return empty string or error message
-     */
-    QString insertAttributes( int field, int cat );
-
-    /** Delete attributes from the table
-     *   @param field
-     *   @param cat
-     *   @return empty string or error message
-     */
-    QString deleteAttribute( int field, int cat );
-
-    /** Check if a database row exists and it is orphan (no more lines with
-     *  that category)
-     *   @param field
-     *   @param cat
-     *   @param orphan set to true if a record exits and it is orphan
-     *   @return empty string or error message
-     */
-    QString isOrphan( int field, int cat, int &orphan );
-
-    /** Create table and link vector to this table
-     *   @param field
-     *   @param columns SQL definition for columns, e.g. cat integer, label varchar(10)
-     *   @return empty string or error message
-     */
-    QString createTable( int field, const QString &key, const QString &columns );
-
-    /** Add column to table
-     *   @param field
-     *   @param column SQL definition for columns, e.g. label varchar(10)
-     *   @return empty string or error message
-     */
-    QString addColumn( int field, const QString &column );
 
     /* Following functions work only until first edit operation! (category index used) */
 
@@ -441,6 +390,8 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
     void onEditingStopped();
     void onUndoIndexChanged( int index );
 
+    void onDataChanged();
+
   protected:
     // used by QgsGrassFeatureSource
     QgsGrassVectorMapLayer *openLayer() const;
@@ -497,9 +448,10 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
     /** Fields used for topo layers */
     QgsFields mTopoFields;
 
-    QgsFields mEditFields;
+    //QgsFields mEditFields;
 
     QgsVectorLayerEditBuffer* mEditBuffer;
+    QgsVectorLayer* mEditLayer;
 
     friend class QgsGrassFeatureSource;
     friend class QgsGrassFeatureIterator;

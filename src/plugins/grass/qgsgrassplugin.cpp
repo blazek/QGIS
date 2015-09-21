@@ -588,6 +588,10 @@ void QgsGrassPlugin::projectRead()
 void QgsGrassPlugin::newProject()
 {
   QgsDebugMsg( "entered" );
+  // debug
+  QgsVectorLayer* vectorLayer = qGisInterface->addVectorLayer( "/home/radim/gdata/grass-plugin/world_location_4326/edit/simple/1_line", "line", "grass" );
+  vectorLayer->startEditing();
+  qGisInterface->setActiveLayer( vectorLayer );
 }
 
 // Unload the plugin by cleaning up the GUI
