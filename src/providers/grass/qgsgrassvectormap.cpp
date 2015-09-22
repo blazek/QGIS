@@ -310,6 +310,11 @@ bool QgsGrassVectorMap::closeEdit( bool newMap )
   closeAllIterators(); // blocking
 
   QgsGrass::lock();
+  Q_FOREACH ( QgsGrassVectorMapLayer *l, mLayers )
+  {
+    l->closeEdit();
+  }
+
   mOldLids.clear();
   mNewLids.clear();
   mOldGeometries.clear();

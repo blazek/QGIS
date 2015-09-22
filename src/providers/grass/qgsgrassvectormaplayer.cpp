@@ -41,6 +41,7 @@ QgsGrassVectorMapLayer::QgsGrassVectorMapLayer( QgsGrassVectorMap *map, int fiel
     , mValid( false )
     , mMap( map )
     , mFieldInfo( 0 )
+    , mDriver( 0 )
     , mHasTable( false )
     , mKeyColumn( -1 )
     , mUsers( 0 )
@@ -292,8 +293,8 @@ void QgsGrassVectorMapLayer::load()
     }
     mMinMax << minMax;
   }
+  mFields = mTableFields;
   mAttributeFields = mTableFields;
-  updateFields();
 
   QgsDebugMsg( QString( "layer loaded mTableFields.size() = %1 mAttributes.size() = %2" ).arg( mTableFields.size() ).arg( mAttributes.size() ) );
   mValid = true;
@@ -331,15 +332,31 @@ QStringList QgsGrassVectorMapLayer::fieldNames( QgsFields & fields )
 void QgsGrassVectorMapLayer::updateFields()
 {
   QgsDebugMsg( "entered" );
-  mFields = mTableFields;
-  if ( mMap->isEdited() )
-  {
-    QString comment = tr( "Virtual topology symbol field" );
-    QgsField topoField = QgsField( QgsGrassVectorMap::topoSymbolFieldName(), QVariant::Int, "integer", 0, 0, comment );
-    mFields.append( topoField );
-  }
-  QgsDebugMsg( "current fields: " +  fieldNames( mFields ).join( "," ) );
 
+  // update fields to pass layer/buffer check when commiting
+  for ( int i = mFields.size() - 1; i >= 0; i-- )
+  {
+    QgsField field = mFields[i];
+    if ( field.name() == QgsGrassVectorMap::topoSymbolFieldName() )
+    {
+      continue;
+    }
+    if ( mTableFields.indexFromName( field.name() ) == -1 )
+    {
+      mFields.remove( i );
+    }
+  }
+  for ( int i = 0; i < mTableFields.size(); i++ )
+  {
+    QgsField field = mTableFields[i];
+    if ( mFields.indexFromName( field.name() ) == -1 )
+    {
+      mFields.append( field );
+    }
+  }
+
+#if 0
+  // keep mapping to original fields skipping virtual topo symbol field
   mAttributeIndexes.clear();
   for ( int i = 0; i < mFields.size(); i++ )
   {
@@ -350,12 +367,96 @@ void QgsGrassVectorMapLayer::updateFields()
       QgsDebugMsg( QString( "mAttributeIndexes[%1] = %2" ).arg( i ).arg( index ) );
     }
   }
+#endif
+}
+
+QString QgsGrassVectorMapLayer::quotedValue( QVariant value )
+{
+  if ( value.isNull() )
+  {
+    return "NULL";
+  }
+
+  switch ( value.type() )
+  {
+    case QVariant::Int:
+    case QVariant::LongLong:
+    case QVariant::Double:
+      return value.toString();
+
+    case QVariant::Bool:
+      return value.toBool() ? "TRUE" : "FALSE";
+
+    default:
+    case QVariant::String:
+      QString v = value.toString();
+      v.replace( "'", "''" );
+      if ( v.contains( "\\" ) )
+      {
+        v.replace( "\\", "\\\\" );
+      }
+      return v.prepend( "'" ).append( "'" );
+  }
+}
+
+dbDriver * QgsGrassVectorMapLayer::openDriver( QString &error )
+{
+  QgsDebugMsg( "entered" );
+  dbDriver * driver = 0;
+  if ( !mFieldInfo )
+  {
+    error = tr( "No field info" );
+    QgsDebugMsg( error );
+  }
+  else
+  {
+    QgsDebugMsg( "Field info found -> open database" );
+    setMapset();
+    driver = db_start_driver_open_database( mFieldInfo->driver, mFieldInfo->database );
+
+    if ( !driver )
+    {
+      error = tr( "Cannot open database %1 by driver %2" ).arg( mFieldInfo->database ).arg( mFieldInfo->driver );
+      QgsDebugMsg( error );
+    }
+    else
+    {
+      QgsDebugMsg( "Database opened" );
+    }
+  }
+  return driver;
+}
+
+void QgsGrassVectorMapLayer::addTopoField( QgsFields &fields )
+{
+  QString comment = tr( "Virtual topology symbol field" );
+  QgsField topoField = QgsField( QgsGrassVectorMap::topoSymbolFieldName(), QVariant::Int, "integer", 0, 0, comment );
+  fields.append( topoField );
 }
 
 void QgsGrassVectorMapLayer::startEdit()
 {
   QgsDebugMsg( "entered" );
-  updateFields();
+
+  // add topo field which is present until closeEdit when data are reloaded
+  addTopoField( mFields );
+
+  QString error;
+  mDriver = openDriver( error );
+  if ( !error.isEmpty() )
+  {
+    QgsGrass::warning( error );
+  }
+}
+
+void QgsGrassVectorMapLayer::closeEdit()
+{
+  QgsDebugMsg( "entered" );
+
+  if ( mDriver )
+  {
+    db_close_database_shutdown_driver( mDriver );
+  }
 }
 
 QVariant QgsGrassVectorMapLayer::attribute( int cat, int index )
@@ -374,18 +475,14 @@ QVariant QgsGrassVectorMapLayer::attribute( int cat, int index )
   }
   else
   {
-    int attributeIndex = mAttributeIndexes.value( index, -1 );
-    if ( attributeIndex == -1 )
-    {
-      QgsDebugMsgLevel( QString( "index %1 not found" ).arg( index ), 3 );
-      return QVariant();
-    }
+    // during editing are accessed only original columns with original indices,
+    // layer/buffer do the mapping
     if ( !mAttributes.contains( cat ) )
     {
       QgsDebugMsgLevel( QString( "cat %1 not found in attributes" ).arg( cat ), 3 );
       return QVariant();
     }
-    QVariant value = mAttributes.value( cat ).value( attributeIndex );
+    QVariant value = mAttributes.value( cat ).value( index );
     QgsDebugMsgLevel( QString( "cat = %1 index = %2 value = %3" ).arg( cat ).arg( index ).arg( value.toString() ), 3 );
     return value;
   }
@@ -402,26 +499,12 @@ void QgsGrassVectorMapLayer::executeSql( const QString &sql, QString &error )
 {
   QgsDebugMsg( "sql = " + sql );
 
-  if ( !mFieldInfo )
+  if ( !mDriver )
   {
-    error = tr( "No field info" );
+    error = tr( "Driver is not open" );
     QgsDebugMsg( error );
     return;
   }
-
-  QgsDebugMsg( "Field info found -> open database" );
-
-  setMapset();
-  dbDriver *driver = db_start_driver_open_database( mFieldInfo->driver, mFieldInfo->database );
-
-  if ( !driver )
-  {
-    error = tr( "Cannot open database %1 by driver %2" ).arg( mFieldInfo->database ).arg( mFieldInfo->driver );
-    QgsDebugMsg( error );
-    return;
-  }
-
-  QgsDebugMsg( "Database opened" );
 
   dbString dbstr;
   db_init_string( &dbstr );
@@ -429,14 +512,13 @@ void QgsGrassVectorMapLayer::executeSql( const QString &sql, QString &error )
 
   QgsDebugMsg( QString( "SQL: %1" ).arg( db_get_string( &dbstr ) ) );
 
-  int ret = db_execute_immediate( driver, &dbstr );
+  int ret = db_execute_immediate( mDriver, &dbstr );
   if ( ret != DB_OK )
   {
     error = QString::fromLatin1( db_get_error_msg() );
     QgsDebugMsg( error );
   }
 
-  db_close_database_shutdown_driver( driver );
   db_free_string( &dbstr );
 }
 
@@ -475,11 +557,9 @@ void QgsGrassVectorMapLayer::createTable( const QString &key, const QString &col
     return;
   }
 
-  dbDriver *driver = db_start_driver_open_database( mFieldInfo->driver, mFieldInfo->database );
-  if ( !driver )
+  mDriver = openDriver( error );
+  if ( !error.isEmpty() )
   {
-    error = tr( "Cannot open database %1 by driver %2" ).arg( mFieldInfo->database ).arg( mFieldInfo->driver );
-    QgsDebugMsg( error );
     return;
   }
 
@@ -493,14 +573,13 @@ void QgsGrassVectorMapLayer::createTable( const QString &key, const QString &col
 
   QgsDebugMsg( QString( "query: %1" ).arg( db_get_string( &dbstr ) ) );
 
-  int ret = db_execute_immediate( driver, &dbstr );
+  int ret = db_execute_immediate( mDriver, &dbstr );
   if ( ret != DB_OK )
   {
     error = QString::fromLatin1( db_get_error_msg() );
     QgsDebugMsg( error );
   }
 
-  db_close_database_shutdown_driver( driver );
   db_free_string( &dbstr );
 
   if ( !error.isEmpty() )
@@ -524,14 +603,6 @@ void QgsGrassVectorMapLayer::addColumn( const QgsField &field, QString &error )
 {
   QgsDebugMsg( QString( "field.name() = %1 field.type() = %2" ).arg( field.name() ).arg( field.type() ) );
 
-  if ( !mFieldInfo )
-  {
-    error = tr( "Cannot create field info" );
-    QgsDebugMsg( error );
-    return;
-  }
-
-
   QString type = field.typeName();
   if ( type == "varchar" )
   {
@@ -547,18 +618,39 @@ void QgsGrassVectorMapLayer::addColumn( const QgsField &field, QString &error )
   {
     mTableFields.append( field );
 
-    if ( mAttributeFields.indexFromName( field.name() ) == -1 ) // may be delete column undo, so it is there
+    int index = mAttributeFields.indexFromName( field.name() );
+    if ( index != -1 )
     {
+      // the column is already in attributes (delete column undo)
+      QgsDebugMsg( "insert old values" );
+      QStringList errors;
+      Q_FOREACH ( int cat, mAttributes.keys() )
+      {
+        QVariant value = mAttributes.value( cat ).value( index );
+        QString valueString = quotedValue( value );
+        QString query = QString( "UPDATE %1 SET %2 = %3" ).arg( mFieldInfo->table ).arg( field.name() ).arg( valueString );
+        QString err;
+        executeSql( query, err );
+        if ( !err.isEmpty() )
+        {
+          errors << err;
+        }
+        if ( errors.size() > 5 )
+        {
+          error = tr( "Errors updating restored column, update interrupted" ) + " : " + errors.join( "; " );
+          break;
+        }
+      }
+    }
+    else
+    {
+      // really new column
       mAttributeFields.append( field );
       Q_FOREACH ( int cat, mAttributes.keys() )
       {
         mAttributes[cat].append( QVariant() );
       }
     }
-
-    updateFields();
-
-    // TODO: restore old values if it is delete column undo
   }
 }
 
@@ -566,45 +658,58 @@ void QgsGrassVectorMapLayer::deleteColumn( const QgsField &field, QString &error
 {
   QgsDebugMsg( QString( "field.name() = %1" ).arg( field.name() ) );
 
-  QString query;
+  if ( field.name() == QgsGrassVectorMap::topoSymbolFieldName() )
+  {
+    error = tr( "%1 field cannot be deleted, it is temporary virtual field used for topology symbol." ).arg( field.name() );
+    return;
+  }
+
   // SQLite does not support DROP COLUMN
   if ( QString( mFieldInfo->driver ) == "sqlite" )
   {
     QStringList columns;
-    for ( int i = 0; i < fields().size(); i++ )
+    for ( int i = 0; i < mTableFields.size(); i++ )
     {
-      QgsField f = fields()[i];
+      QgsField f = mTableFields[i];
       if ( f.name() != field.name() )
       {
         columns << f.name();
       }
     }
-
-    QStringList commands;
-    // TODO: if an error happens in transaction it is not reported by executeSql()/db_execute_immediate()
-    commands << "BEGIN TRANSACTION";
-    commands << QString( "CREATE TABLE %1_new AS SELECT %2 FROM %1" ).arg( mFieldInfo->table ).arg( columns.join( "," ) );
-    commands << QString( "DROP TABLE %1" ).arg( mFieldInfo->table );
-    commands << QString( "ALTER TABLE %1_new RENAME TO %1" ).arg( mFieldInfo->table );
-    commands << "COMMIT";
-
-    query = commands.join( ";" );
+    QStringList queries;
+    queries << "BEGIN TRANSACTION";
+    queries << QString( "CREATE TEMPORARY TABLE %1_tmp_drop_column AS SELECT %2 FROM %1" ).arg( mFieldInfo->table ).arg( columns.join( "," ) );
+    queries << QString( "DROP TABLE %1" ).arg( mFieldInfo->table );
+    queries << QString( "CREATE TABLE %1 AS SELECT * FROM %1_tmp_drop_column" ).arg( mFieldInfo->table );
+    queries << QString( "DROP TABLE %1_tmp_drop_column" ).arg( mFieldInfo->table );
+    queries << QString( "CREATE UNIQUE INDEX %1_%2 ON %1 (%2)" ).arg( mFieldInfo->table ).arg( mFieldInfo->key );
+    queries << "COMMIT";
+    // Execute one after another to get possible error
+    Q_FOREACH ( QString query, queries )
+    {
+      QgsDebugMsg( "query = " + query );
+      executeSql( query, error );
+      if ( !error.isEmpty() )
+      {
+        break;
+      }
+    }
   }
   else
   {
-    query = QString( "ALTER TABLE %1 DROP COLUMN %2" ).arg( mFieldInfo->table ).arg( field.name() );
+    QString query = QString( "ALTER TABLE %1 DROP COLUMN %2" ).arg( mFieldInfo->table ).arg( field.name() );
+    QgsDebugMsg( "query = " + query );
+    executeSql( query, error );
   }
-  QgsDebugMsg( "query = " + query );
-  executeSql( query, error );
 
   if ( error.isEmpty() )
   {
+    QgsDebugMsg( "error = " + error );
     int index = mTableFields.indexFromName( field.name() );
     if ( index != -1 )
     {
       mTableFields.remove( index );
     }
-    updateFields();
   }
 }
 
@@ -645,20 +750,9 @@ void QgsGrassVectorMapLayer::isOrphan( int cat, int &orphan, QString &error )
     }
   }
 
-  // Check if attribute exists
-  if ( !mFieldInfo )
+  if ( !mDriver )
   {
-    QgsDebugMsg( "No field info -> no attributes" );
-    orphan = false;
-    return;
-  }
-
-  QgsDebugMsg( "Field info found -> open database" );
-  setMapset();
-  dbDriver *driver = db_start_driver_open_database( mFieldInfo->driver, mFieldInfo->database );
-  if ( !driver )
-  {
-    error = tr( "Cannot open database %1 by driver %2" ).arg( mFieldInfo->database ).arg( mFieldInfo->driver );
+    error = tr( "Driver is not open" );
     QgsDebugMsg( error );
     return;
   }
@@ -674,9 +768,8 @@ void QgsGrassVectorMapLayer::isOrphan( int cat, int &orphan, QString &error )
   QgsDebugMsg( QString( "SQL: %1" ).arg( db_get_string( &dbstr ) ) );
 
   dbCursor cursor;
-  if ( db_open_select_cursor( driver, &dbstr, &cursor, DB_SCROLL ) != DB_OK )
+  if ( db_open_select_cursor( mDriver, &dbstr, &cursor, DB_SCROLL ) != DB_OK )
   {
-    db_close_database_shutdown_driver( driver );
     error = tr( "Cannot query database: %1" ).arg( query );
   }
 
@@ -692,8 +785,7 @@ void QgsGrassVectorMapLayer::isOrphan( int cat, int &orphan, QString &error )
     QgsDebugMsg( QString( "count = %1" ).arg( count ) );
     orphan = count == 0;
   }
-
-  db_close_database_shutdown_driver( driver );
+  db_close_cursor( &cursor );
   db_free_string( &dbstr );
 }
 
@@ -701,25 +793,12 @@ void QgsGrassVectorMapLayer::updateAttributes( int cat, const QString &values, Q
 {
   QgsDebugMsg( QString( "mField = %1 cat = %2" ).arg( mField ).arg( cat ) );
 
-  if ( mFieldInfo )
+  if ( !mDriver )
   {
-    error = tr( "No field info" );
+    error = tr( "Driver is not open" );
     QgsDebugMsg( error );
     return;
   }
-
-  QgsDebugMsg( "Field info found -> open database" );
-  setMapset();
-
-  dbDriver *driver = db_start_driver_open_database( mFieldInfo->driver, mFieldInfo->database );
-  if ( !driver )
-  {
-    error = tr( "Cannot open database %1 by driver %2" ).arg( mFieldInfo->database ).arg( mFieldInfo->driver );
-    QgsDebugMsg( error );
-    return;
-  }
-
-  QgsDebugMsg( "Database opened -> read attributes" );
 
   dbString dbstr;
   db_init_string( &dbstr );
@@ -742,14 +821,12 @@ void QgsGrassVectorMapLayer::updateAttributes( int cat, const QString &values, Q
 
   QgsDebugMsg( QString( "SQL: %1" ).arg( db_get_string( &dbstr ) ) );
 
-  int ret = db_execute_immediate( driver, &dbstr );
+  int ret = db_execute_immediate( mDriver, &dbstr );
   if ( ret != DB_OK )
   {
     error = QString::fromLatin1( db_get_error_msg() );
     QgsDebugMsg( error );
   }
-
-  db_close_database_shutdown_driver( driver );
   db_free_string( &dbstr );
 
   return;

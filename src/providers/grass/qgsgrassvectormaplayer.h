@@ -24,6 +24,20 @@
 
 #include "qgsfield.h"
 
+extern "C"
+{
+#include <grass/version.h>
+#include <grass/gprojects.h>
+#include <grass/gis.h>
+#include <grass/dbmi.h>
+#if GRASS_VERSION_MAJOR < 7
+#include <grass/Vect.h>
+#else
+#include <grass/vector.h>
+#define BOUND_BOX bound_box
+#endif
+}
+
 class QgsGrassVectorMap;
 
 class GRASS_LIB_EXPORT QgsGrassVectorMapLayer : public QObject
@@ -36,9 +50,9 @@ class GRASS_LIB_EXPORT QgsGrassVectorMapLayer : public QObject
     bool isValid() const { return mValid; }
     QgsGrassVectorMap *map() { return mMap; }
 
-    /** Current fields, in sync with vector layer fields.
-     * When the map is in editing mode, fields() contain topo symbol column,
-     * added/deleted columns in editing are reflected in fields() */
+    /** Original fields before editing started + topo field if edited.
+     * Does not reflect add/delete column.
+     * Original fields must be returned by provider fields() */
     QgsFields & fields() { return mFields; }
 
     static QStringList fieldNames( QgsFields & fields );
@@ -66,6 +80,7 @@ class GRASS_LIB_EXPORT QgsGrassVectorMapLayer : public QObject
     void close();
 
     void startEdit();
+    void closeEdit();
 
     //------------------------------- Database utils ---------------------------------
     void setMapset();
@@ -117,14 +132,19 @@ class GRASS_LIB_EXPORT QgsGrassVectorMapLayer : public QObject
 
     void deleteColumn( const QgsField &field, QString &error );
 
-  private:
-    // update current fields
+    // update fields to real state
     void updateFields();
 
+  private:
+    QString quotedValue( QVariant value );
+    dbDriver * openDriver( QString &error );
+    void addTopoField( QgsFields &fields );
     int mField;
     bool mValid;
     QgsGrassVectorMap *mMap;
     struct field_info *mFieldInfo;
+    dbDriver *mDriver;
+
     bool mHasTable;
     // index of key column
     int mKeyColumn;
@@ -133,7 +153,7 @@ class GRASS_LIB_EXPORT QgsGrassVectorMapLayer : public QObject
     // cat field
     QgsFields mTableFields;
 
-    // current fields
+    // original fields + topo symbol when editing, does not reflect add/column
     QgsFields mFields;
 
     // list of fields in mAttributes, these fields may only grow when a field is added,
@@ -143,8 +163,9 @@ class GRASS_LIB_EXPORT QgsGrassVectorMapLayer : public QObject
     // Map of attributes with cat as key
     QMap<int, QList<QVariant> > mAttributes;
 
-    // Map of current fields() indexes to mAttributes
-    QMap<int, int> mAttributeIndexes;
+
+    // Map of current original fields() indexes to mAttributes, skipping topo symbol
+    //QMap<int, int> mAttributeIndexes;
 
     // minimum and maximum values of attributes
     QList<QPair<double, double> > mMinMax;

@@ -370,17 +370,12 @@ QGis::WkbType QgsGrassProvider::geometryType() const
 {
   return mQgisType;
 }
-/**
-* Return the feature type
-*/
+
 long QgsGrassProvider::featureCount() const
 {
   return mNumberFeatures;
 }
 
-/**
-* Return fields
-*/
 const QgsFields & QgsGrassProvider::fields() const
 {
   if ( isTopoType() )
@@ -389,6 +384,7 @@ const QgsFields & QgsGrassProvider::fields() const
   }
   else
   {
+    // Original fields must be returned during editing because edit buffer updates fields by indices
     return mLayer->fields();
   }
 }
@@ -994,6 +990,7 @@ void QgsGrassProvider::startEditing( QgsVectorLayer *vectorLayer )
   connect( mEditBuffer, SIGNAL( attributeAdded( int ) ), SLOT( onAttributeAdded( int ) ) );
   connect( mEditBuffer, SIGNAL( attributeDeleted( int ) ), SLOT( onAttributeDeleted( int ) ) );
   connect( vectorLayer, SIGNAL( beforeCommitChanges() ), SLOT( onBeforeCommitChanges() ) );
+  connect( vectorLayer, SIGNAL( beforeRollBack() ), SLOT( onBeforeRollBack() ) );
   connect( vectorLayer, SIGNAL( editingStopped() ), SLOT( onEditingStopped() ) );
 
   connect( vectorLayer->undoStack(), SIGNAL( indexChanged( int ) ), this, SLOT( onUndoIndexChanged( int ) ) );
@@ -1339,6 +1336,7 @@ void QgsGrassProvider::onAttributeAdded( int idx )
   if ( !error.isEmpty() )
   {
     QgsGrass::warning( error );
+    // TODO: remove the column somehow from the layer/buffer - undo?
   }
   else
   {
@@ -1367,6 +1365,7 @@ void QgsGrassProvider::onAttributeDeleted( int idx )
   if ( !error.isEmpty() )
   {
     QgsGrass::warning( error );
+    // TODO: get back the column somehow to the layer/buffer - undo?
   }
 }
 
@@ -1376,7 +1375,29 @@ void QgsGrassProvider::onUndoIndexChanged( int index )
   QgsDebugMsg( QString( "index = %1" ).arg( index ) );
 }
 
+
+bool QgsGrassProvider::addAttributes( const QList<QgsField> &attributes )
+{
+  Q_UNUSED( attributes );
+  // update fields because QgsVectorLayerEditBuffer::commitChanges() checks old /new fields count
+  mLayer->updateFields();
+  return true;
+}
+
+bool QgsGrassProvider::deleteAttributes( const QgsAttributeIds &attributes )
+{
+  Q_UNUSED( attributes );
+  // update fields because QgsVectorLayerEditBuffer::commitChanges() checks old /new fields count
+  mLayer->updateFields();
+  return true;
+}
+
 void QgsGrassProvider::onBeforeCommitChanges()
+{
+  QgsDebugMsg( "entered" );
+}
+
+void QgsGrassProvider::onBeforeRollBack()
 {
   QgsDebugMsg( "entered" );
 }

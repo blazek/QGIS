@@ -129,9 +129,9 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
     // TODO: implement also these functions but disable during manual layer editing
     virtual bool addFeatures( QgsFeatureList & flist ) override { Q_UNUSED( flist ); return true; }
     virtual bool deleteFeatures( const QgsFeatureIds & id ) override { Q_UNUSED( id ); return true; }
-    virtual bool addAttributes( const QList<QgsField> &attributes ) override { Q_UNUSED( attributes ); return true; }
-    virtual bool deleteAttributes( const QgsAttributeIds &attributes ) override { Q_UNUSED( attributes ); return true; }
-    virtual bool changeAttributeValues( const QgsChangedAttributesMap & attr_map ) override { Q_UNUSED( attr_map ); return true; }
+    virtual bool addAttributes( const QList<QgsField> &attributes ) override;
+    virtual bool deleteAttributes( const QgsAttributeIds &attributes ) override;
+    virtual bool changeAttributeValues( const QgsChangedAttributesMap & attr_map ) override  { Q_UNUSED( attr_map ); return true; }
     virtual bool changeGeometryValues( QgsGeometryMap & geometry_map ) override { Q_UNUSED( geometry_map ); return true; }
 
 
@@ -387,6 +387,7 @@ class GRASS_LIB_EXPORT QgsGrassProvider : public QgsVectorDataProvider
     void onAttributeAdded( int idx );
     void onAttributeDeleted( int idx );
     void onBeforeCommitChanges();
+    void onBeforeRollBack();
     void onEditingStopped();
     void onUndoIndexChanged( int index );
 
