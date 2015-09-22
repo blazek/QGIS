@@ -519,7 +519,9 @@ void QgsGrassVectorMapLayer::executeSql( const QString &sql, QString &error )
     QgsDebugMsg( error );
   }
 
-  db_free_string( &dbstr );
+  db_free_string( &dbstr );  //if ( index < 0 || index > )
+  QgsField field;
+  return;
 }
 
 void QgsGrassVectorMapLayer::createTable( const QString &key, const QString &columns, QString &error )
@@ -789,9 +791,10 @@ void QgsGrassVectorMapLayer::isOrphan( int cat, int &orphan, QString &error )
   db_free_string( &dbstr );
 }
 
-void QgsGrassVectorMapLayer::updateAttributes( int cat, const QString &values, QString &error )
+void QgsGrassVectorMapLayer::changeAttributeValue( int cat, QgsField field, QVariant value, QString &error )
 {
-  QgsDebugMsg( QString( "mField = %1 cat = %2" ).arg( mField ).arg( cat ) );
+  QgsDebugMsg( QString( "cat = %1 field.name() = %2 value = %3" ).arg( cat ).arg( field.name() ).arg( value.toString() ) );
+
 
   if ( !mDriver )
   {
@@ -802,7 +805,9 @@ void QgsGrassVectorMapLayer::updateAttributes( int cat, const QString &values, Q
 
   dbString dbstr;
   db_init_string( &dbstr );
-  QString query = QString( "UPDATE %1 SET %2 WHERE %3 = %4" ).arg( mFieldInfo->table ).arg( values ).arg( mFieldInfo->key ).arg( cat );
+  QString valueString = quotedValue( value );
+  QString query = QString( "UPDATE %1 SET %2 = %3 WHERE %4 = %5" ).arg( mFieldInfo->table )
+                  .arg( field.name() ).arg( valueString ).arg( mFieldInfo->key ).arg( cat );
 
   QgsDebugMsg( QString( "query: %1" ).arg( query ) );
 

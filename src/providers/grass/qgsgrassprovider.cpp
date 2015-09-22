@@ -1311,21 +1311,47 @@ void QgsGrassProvider::onGeometryChanged( QgsFeatureId fid, QgsGeometry &geom )
 
   Vect_destroy_line_struct( points );
   Vect_destroy_cats_struct( cats );
-
-
 }
 
 void QgsGrassProvider::onAttributeValueChanged( QgsFeatureId fid, int idx, const QVariant &value )
 {
-  Q_UNUSED( fid )
-  Q_UNUSED( idx )
-  Q_UNUSED( value )
   QgsDebugMsg( QString( "fid = %1 idx = %2 value = %3" ).arg( fid ).arg( idx ).arg( value.toString() ) );
+
+  int oldLid = QgsGrassFeatureIterator::lidFromFid( fid );
+  int cat = QgsGrassFeatureIterator::catFromFid( fid );
+  int realLine = oldLid;
+  if ( mLayer->map()->newLids().contains( oldLid ) ) // if it was changed already
+  {
+    realLine = mLayer->map()->newLids().value( oldLid );
+  }
+  QgsDebugMsg( QString( "fid = %1 oldLid = %2 realLine = %3 cat = %4" ).arg( fid ).arg( oldLid ).arg( realLine ).arg( cat ) );
+
+  // index is for current fields
+  if ( idx < 0 || idx > mEditLayer->fields().size() )
+  {
+    QgsDebugMsg( "index out of range" );
+    return;
+  }
+  QgsField field = mEditLayer->fields()[idx];
+
+  if ( cat > 0 )
+  {
+    QString error;
+    mLayer->changeAttributeValue( cat, field, value, error );
+    if ( !error.isEmpty() )
+    {
+      QgsGrass::warning( error );
+    }
+  }
+  else
+  {
+    QgsDebugMsg( "no cat -> add new cat to line" );
+    // TODO
+  }
 }
 
 void QgsGrassProvider::onAttributeAdded( int idx )
 {
-  Q_UNUSED( idx )
   QgsDebugMsg( QString( "idx = %1" ).arg( idx ) );
   if ( idx < 0 || idx >= mEditLayer->fields().size() )
   {
@@ -1338,15 +1364,10 @@ void QgsGrassProvider::onAttributeAdded( int idx )
     QgsGrass::warning( error );
     // TODO: remove the column somehow from the layer/buffer - undo?
   }
-  else
-  {
-    mEditLayer->updateFields(); // to get topo symbol last
-  }
 }
 
 void QgsGrassProvider::onAttributeDeleted( int idx )
 {
-  Q_UNUSED( idx )
   QgsDebugMsg( QString( "idx = %1" ).arg( idx ) );
   // The index of deleted field is useless because the field was already removed from mEditLayer->fields().
   // Find deleted field.

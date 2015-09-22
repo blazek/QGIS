@@ -86,28 +86,20 @@ class GRASS_LIB_EXPORT QgsGrassVectorMapLayer : public QObject
     void setMapset();
 
     /** Execute SQL statement
-     *   @param sql
-     *   @return empty string or error message
-     */
+     *   @param sql */
     void executeSql( const QString &sql, QString &error );
 
     /** Update attributes
-     *   @param field
      *   @param cat
-     *   @param update comma separated update string, e.g.: col1 = 5, col2 = 'Val d''Aosta'
-     *   @return empty string or error messagemLayer
-     */
-    void updateAttributes( int cat, const QString &values, QString &error );
+     *   @param index ields  index */
+    void changeAttributeValue( int cat, QgsField field, QVariant value, QString &error );
 
     /** Insert new attributes to the table (it does not check if attributes already exists)
-     *   @param cat
-     *   @return empty string or error message
-     */
+     *   @param cat */
     void insertAttributes( int cat, QString &error );
 
     /** Delete attributes from the table
      *   @param cat
-     *   @return empty string or error message
      */
     void deleteAttribute( int cat, QString &error );
 
@@ -162,7 +154,6 @@ class GRASS_LIB_EXPORT QgsGrassVectorMapLayer : public QObject
 
     // Map of attributes with cat as key
     QMap<int, QList<QVariant> > mAttributes;
-
 
     // Map of current original fields() indexes to mAttributes, skipping topo symbol
     //QMap<int, int> mAttributeIndexes;
