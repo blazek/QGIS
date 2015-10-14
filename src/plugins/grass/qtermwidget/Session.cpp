@@ -195,14 +195,21 @@ QList<TerminalDisplay *> Session::views() const
 
 void Session::addView(TerminalDisplay * widget)
 {
+    qDebug() << "Session::addView";
     Q_ASSERT( !_views.contains(widget) );
 
     _views.append(widget);
 
+	if ( _emulation == 0 )
+	  qDebug() << "emulation is null";
+
     if ( _emulation != 0 ) {
+	    qDebug() << "connect _emulation";
         // connect emulation - view signals and slots
-        connect( widget , SIGNAL(keyPressedSignal(QKeyEvent *)) , _emulation ,
+        bool ok = connect( widget , SIGNAL(keyPressedSignal(QKeyEvent *)) , _emulation ,
                  SLOT(sendKeyEvent(QKeyEvent *)) );
+		//qDebug() << "connected keyPressedSignal to sendKeyEvent ok = " << ok;
+		//_emulation->sendKeyEvent( new QKeyEvent( QEvent::KeyPress, 'x', Qt::NoModifier) );
         connect( widget , SIGNAL(mouseSignal(int,int,int,int)) , _emulation ,
                  SLOT(sendMouseEvent(int,int,int,int)) );
         connect( widget , SIGNAL(sendStringToEmu(const char *)) , _emulation ,
@@ -240,6 +247,7 @@ void Session::viewDestroyed(QObject * view)
 
 void Session::removeView(TerminalDisplay * widget)
 {
+    qDebug() << "Session::removeView";
     _views.removeAll(widget);
 
     disconnect(widget,0,this,0);
@@ -337,11 +345,17 @@ void Session::run()
      * Dont know about the arguments though.. maybe youll need some more checking im not sure
      * However this works on Arch and FreeBSD now.
      */
+	qDebug() << "Session::run() _shellProcess->start";
     int result = _shellProcess->start(exec,
                                       arguments,
                                       _environment << backgroundColorHint,
                                       windowId(),
                                       _addToUtmp);
+
+	qDebug() << "Session::run() result = " << result;
+	//_shellProcess->waitForFinished( 300000 );
+	//qDebug() << "Session::run() stdout = " << _shellProcess->readAllStandardOutput();
+	//qDebug() << "Session::run() stderr = " << _shellProcess->readAllStandardError();
 
     if (result < 0) {
         qDebug() << "CRASHED! result: " << result;
@@ -576,6 +590,10 @@ void Session::refresh()
 
 bool Session::sendSignal(int signal)
 {
+// TODO
+#ifdef Q_OS_WIN
+    return false;
+#else
     int result = ::kill(_shellProcess->pid(),signal);
 
      if ( result == 0 )
@@ -585,16 +603,20 @@ bool Session::sendSignal(int signal)
      }
      else
          return false;
+#endif
 }
 
 void Session::close()
 {
     _autoClose = true;
     _wantedClose = true;
+// TODO
+#ifndef Q_OS_WIN
     if (!_shellProcess->isRunning() || !sendSignal(SIGHUP)) {
         // Forced close.
         QTimer::singleShot(1, this, SIGNAL(finished()));
     }
+#endif
 }
 
 void Session::sendText(const QString & text) const
@@ -931,6 +953,7 @@ void Session::zmodemFinished()
 */
 void Session::onReceiveBlock( const char * buf, int len )
 {
+    qDebug() << "Session::onReceiveBlock : " << buf;
     _emulation->receiveData( buf, len );
     emit receivedData( QString::fromLatin1( buf, len ) );
 }

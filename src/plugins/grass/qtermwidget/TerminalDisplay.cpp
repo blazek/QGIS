@@ -2573,6 +2573,7 @@ int TerminalDisplay::motionAfterPasting()
 
 void TerminalDisplay::keyPressEvent( QKeyEvent* event )
 {
+    qDebug() << "TerminalDisplay::keyPressEvent key = " << event->key();
     bool emitKeyPressSignal = true;
 
     // Keyboard-based navigation
@@ -2633,6 +2634,7 @@ void TerminalDisplay::keyPressEvent( QKeyEvent* event )
 
     if ( emitKeyPressSignal )
     {
+	    qDebug() << "TerminalDisplay::keyPressEvent emit keyPressedSignal";
         emit keyPressedSignal(event);
 
         if(event->modifiers().testFlag(Qt::ShiftModifier)
@@ -2656,6 +2658,10 @@ void TerminalDisplay::keyPressEvent( QKeyEvent* event )
             scrollToEnd();
         }
     }
+	else
+	{
+	    qDebug() << "TerminalDisplay::keyPressEvent emitKeyPressSignal is false";
+	}
 
     event->accept();
 }
@@ -2727,9 +2733,9 @@ bool TerminalDisplay::handleShortcutOverrideEvent(QKeyEvent* keyEvent)
         }
         if (modifierCount < 2)
         {
-            bool override = false;
-            emit overrideShortcutCheck(keyEvent,override);
-            if (override)
+            bool over_ride = false;
+            emit overrideShortcutCheck(keyEvent,over_ride);
+            if (over_ride)
             {
                 keyEvent->accept();
                 return true;

@@ -33,13 +33,23 @@
 #include "kpty_p.h"
 
 #include <QSocketNotifier>
+#include <QDebug>
 
+#ifndef Q_OS_WIN
 #include <unistd.h>
+#endif
 #include <errno.h>
 #include <signal.h>
 #include <termios.h>
 #include <fcntl.h>
+#ifndef Q_OS_WIN
 #include <sys/ioctl.h>
+#else
+//#include <winioctl.h>
+#include <windows.h>
+#include <winbase.h>
+#include <io.h>
+#endif
 #ifdef HAVE_SYS_FILIO_H
 # include <sys/filio.h>
 #endif
@@ -71,10 +81,13 @@ static void qt_ignore_sigpipe()
 {
     static QBasicAtomicInt atom = Q_BASIC_ATOMIC_INITIALIZER(0);
     if (atom.testAndSetRelaxed(0, 1)) {
+// TODO
+#ifndef Q_OS_WIN
         struct sigaction noaction;
         memset(&noaction, 0, sizeof(noaction));
         noaction.sa_handler = SIG_IGN;
         sigaction(SIGPIPE, &noaction, 0);
+#endif
     }
 }
 
@@ -82,6 +95,7 @@ static void qt_ignore_sigpipe()
 
 bool KPtyDevicePrivate::_k_canRead()
 {
+    qDebug() << "KPtyDevicePrivate::_k_canRead";
     Q_Q(KPtyDevice);
     qint64 readBytes = 0;
 
@@ -90,7 +104,18 @@ bool KPtyDevicePrivate::_k_canRead()
 #else
     int available;
 #endif
+// TODO
+#ifndef Q_OS_WIN
     if (!::ioctl(q->masterFd(), PTY_BYTES_AVAILABLE, (char *) &available)) {
+#else
+
+	DWORD bytesAvail = 0;
+	BOOL ok = PeekNamedPipe( (HANDLE)_get_osfhandle(q->masterFd()), NULL, 0, NULL, &bytesAvail, NULL);
+    qDebug() << "KPtyDevicePrivate::_k_canRead ok = " << ok << " bytesAvail = " << bytesAvail;
+	available = (int)bytesAvail;
+	if ( ok ) {
+
+#endif
 #ifdef Q_OS_SOLARIS
         // A Pty is a STREAMS module, and those can be activated
         // with 0 bytes available. This happens either when ^C is
@@ -113,6 +138,9 @@ bool KPtyDevicePrivate::_k_canRead()
 #endif
 
         char *ptr = readBuffer.reserve(available);
+
+// TODO
+#ifndef Q_OS_WIN
 #ifdef Q_OS_SOLARIS
         // Even if available > 0, it is possible for read()
         // to return 0 on Solaris, due to 0-byte writes in the stream.
@@ -134,8 +162,18 @@ bool KPtyDevicePrivate::_k_canRead()
             return false;
         }
         readBuffer.unreserve(available - readBytes); // *should* be a no-op
-    }
 
+#else // #ifndef Q_OS_WIN
+        NO_INTR(readBytes, read(q->masterFd(), ptr, available));
+
+        if (readBytes < 0) {
+            readBuffer.unreserve(available);
+            q->setErrorString("Error reading from PTY");
+            return false;
+        }
+        readBuffer.unreserve(available - readBytes); // *should* be a no-op
+#endif // #ifndef Q_OS_WIN
+    }
     if (!readBytes) {
         readNotifier->setEnabled(false);
         emit q->readEof();
@@ -160,9 +198,14 @@ bool KPtyDevicePrivate::_k_canWrite()
 
     qt_ignore_sigpipe();
     int wroteBytes;
+// TODO
+#ifdef Q_OS_WIN
+	wroteBytes = -1;
+#else
     NO_INTR(wroteBytes,
             write(q->masterFd(),
                   writeBuffer.readPointer(), writeBuffer.readSize()));
+#endif
     if (wroteBytes < 0) {
         q->setErrorString("Error writing to PTY");
         return false;
@@ -205,6 +248,10 @@ bool KPtyDevicePrivate::_k_canWrite()
 bool KPtyDevicePrivate::doWait(int msecs, bool reading)
 {
     Q_Q(KPtyDevice);
+// TODO
+#ifdef Q_OS_WIN
+	return false;
+#else
 #ifndef __linux__
     struct timeval etv;
 #endif
@@ -266,14 +313,25 @@ bool KPtyDevicePrivate::doWait(int msecs, bool reading)
         }
     }
     return false;
+#endif // Q_OS_WIN
 }
 
 void KPtyDevicePrivate::finishOpen(QIODevice::OpenMode mode)
 {
     Q_Q(KPtyDevice);
+	qDebug() << "KPtyDevicePrivate::finishOpen q->masterFd() = " << q->masterFd();
 
     q->QIODevice::open(mode);
+// TODO
+#ifndef Q_OS_WIN
     fcntl(q->masterFd(), F_SETFL, O_NONBLOCK);
+#else
+	// OK???
+	//FILE* masterFp = fdopen( q->masterFd(), "rw"); // crash
+	//qDebug() << "KPtyDevicePrivate::finishOpen q->masterFd() = " << q->masterFd() << " masterFp = " << masterFp;
+	//(HANDLE) _get_osfhandle(q->masterFd())
+	//setvbuf( masterFp, NULL, _IONBF, BUFSIZ );
+#endif
     readBuffer.clear();
     readNotifier = new QSocketNotifier(q->masterFd(), QSocketNotifier::Read, q);
     writeNotifier = new QSocketNotifier(q->masterFd(), QSocketNotifier::Write, q);

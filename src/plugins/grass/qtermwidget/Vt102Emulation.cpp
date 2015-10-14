@@ -39,7 +39,9 @@
 
 // Standard
 #include <stdio.h>
+#ifndef Q_OS_WIN
 #include <unistd.h>
+#endif
 #include <assert.h>
 
 // Qt
@@ -894,8 +896,10 @@ void Vt102Emulation::sendText( const QString& text )
     sendKeyEvent(&event); // expose as a big fat keypress event
   }
 }
+#include <QDebug>
 void Vt102Emulation::sendKeyEvent( QKeyEvent* event )
 {
+    qDebug() << "Vt102Emulation::sendKeyEvent key = " << event->key();
     Qt::KeyboardModifiers modifiers = event->modifiers();
     KeyboardTranslator::States states = KeyboardTranslator::NoState;
 
@@ -968,7 +972,11 @@ void Vt102Emulation::sendKeyEvent( QKeyEvent* event )
             textToSend += _codec->fromUnicode(event->text());
         }
 
+		qDebug() << "Vt102Emulation::sendKeyEvent sendData : " << textToSend;
         sendData( textToSend.constData() , textToSend.length() );
+
+		// debug - repeater
+		receiveData( textToSend.constData() ,  textToSend.length() );
     }
     else
     {
@@ -978,6 +986,7 @@ void Vt102Emulation::sendKeyEvent( QKeyEvent* event )
                                          "The information needed to convert key presses "
                                          "into characters to send to the terminal "
                                          "is missing.");
+		qDebug() << "Vt102Emulation::sendKeyEvent error : " << translatorError;
         reset();
         receiveData( translatorError.toUtf8().constData() , translatorError.count() );
     }

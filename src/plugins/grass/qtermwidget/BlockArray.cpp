@@ -28,9 +28,14 @@
 
 // System
 #include <assert.h>
+#ifdef Q_OS_WIN
+//#include <windows.h>
+#include <io.h>
+#else
 #include <sys/mman.h>
 #include <sys/param.h>
 #include <unistd.h>
+#endif
 #include <stdio.h>
 
 
@@ -49,7 +54,11 @@ BlockArray::BlockArray()
 {
     // lastmap_index = index = current = size_t(-1);
     if (blocksize == 0) {
+#ifdef Q_OS_WIN
+	    blocksize = sizeof(Block);
+#else
         blocksize = ((sizeof(Block) / getpagesize()) + 1) * getpagesize();
+#endif
     }
 
 }
@@ -152,7 +161,12 @@ const Block * BlockArray::at(size_t i)
     assert(j < size);
     unmap();
 
+#ifdef Q_OS_WIN
+	// TODO
+	Block * block = 0;
+#else
     Block * block = (Block *)mmap(0, blocksize, PROT_READ, MAP_PRIVATE, ion, j * blocksize);
+#endif
 
     if (block == (Block *)-1) {
         perror("mmap");
@@ -167,12 +181,15 @@ const Block * BlockArray::at(size_t i)
 
 void BlockArray::unmap()
 {
+#ifdef Q_OS_WIN
+#else
     if (lastmap) {
         int res = munmap((char *)lastmap, blocksize);
         if (res < 0) {
             perror("munmap");
         }
     }
+#endif
     lastmap = 0;
     lastmap_index = size_t(-1);
 }
@@ -231,7 +248,15 @@ bool BlockArray::setHistorySize(size_t newsize)
         return false;
     } else {
         decreaseBuffer(newsize);
+// TODO
+#ifdef Q_OS_WIN
+		// TODO Q_OS_WIN
+		//HANDLE hFile = (HANDLE)_get_osfhandle(ion);
+		//SetFilePointer(hFile, length*blocksize, NULL, FILE_BEGIN);
+		//SetEndOfFile(hFile);
+#else
         ftruncate(ion, length*blocksize);
+#endif
         size = newsize;
 
         return true;

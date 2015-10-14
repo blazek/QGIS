@@ -23,6 +23,10 @@
 #include <QWidget>
 #include "Filter.h"
 
+#ifdef Q_OS_WIN
+using namespace Konsole;
+#endif
+
 class QVBoxLayout;
 struct TermWidgetImpl;
 class SearchBar;

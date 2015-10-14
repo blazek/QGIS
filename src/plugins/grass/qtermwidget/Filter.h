@@ -391,6 +391,8 @@ private:
 
 }
 
+#ifndef Q_OS_WIN
 typedef Konsole::Filter Filter;
+#endif
 
 #endif //FILTER_H

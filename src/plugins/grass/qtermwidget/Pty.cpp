@@ -32,14 +32,20 @@
 // System
 #include <sys/types.h>
 #include <sys/stat.h>
+#ifdef Q_OS_WIN
+#include <termios.h> // copy from cygwin
+#include <io.h>
+#else
 #include <unistd.h>
-#include <errno.h>
 #include <termios.h>
+#endif
+#include <errno.h>
 #include <signal.h>
 
 // Qt
 #include <QStringList>
 #include <QtDebug>
+#include <QWidget>
 
 #include "kpty.h"
 #include "kptydevice.h"
@@ -156,7 +162,7 @@ void Pty::addEnvironmentVariables(const QStringList& environment)
 int Pty::start(const QString& program,
                const QStringList& programArguments,
                const QStringList& environment,
-               ulong winid,
+               WId winid,
                bool addToUtmp
                //const QString& dbusService,
                //const QString& dbusSession
@@ -168,11 +174,17 @@ int Pty::start(const QString& program,
   // name of the program to execute, so create a list consisting of all
   // but the first argument to pass to setProgram()
   Q_ASSERT(programArguments.count() >= 1);
+
+  qDebug() << "Pty::start program = " << program;
   setProgram(program.toLatin1(),programArguments.mid(1));
 
   addEnvironmentVariables(environment);
 
+#ifdef Q_OS_WIN
+  setEnv("WINDOWID", QString::number((qlonglong)winid));
+#else
   setEnv("WINDOWID", QString::number(winid));
+#endif
 
   // unless the LANGUAGE environment variable has been set explicitly
   // set it to a null string
@@ -210,10 +222,30 @@ int Pty::start(const QString& program,
 
   pty()->setWinSize(_windowLines, _windowColumns);
 
+  qDebug() << "Pty::start program() = " << KProcess::program();
   KProcess::start();
 
   if (!waitForStarted())
       return -1;
+
+// TODO
+#if 0
+  qDebug() << "Pty::start started";
+  waitForFinished( 5000 );
+  qDebug() << "Pty::start  exitStatus = " << exitStatus() << " exitCode = " << exitCode() << " error = " << error() << " errorString = " << errorString();
+  qDebug() << "Pty::start stdout = " << readAllStandardOutput();
+  qDebug() << "Pty::start stderr = " << readAllStandardError();
+
+
+  QProcess *p = new QProcess();
+  QStringList args;
+  p->start("c:/OSGeo4W/apps/msys/bin/ls.exe", args);
+  qDebug() << "waitForStarted = " << p->waitForStarted();
+  p->waitForFinished( 5000 );
+  qDebug() << "exitStatus = " << p->exitStatus() << " exitCode = " << p->exitCode() << " error = " << p->error() << " errorString = " << p->errorString();
+  qDebug() << "stdout = " << p->readAllStandardOutput();
+  qDebug() << "stderr = " << p->readAllStandardError();
+#endif
 
   return 0;
 }
@@ -244,10 +276,13 @@ void Pty::setWriteable(bool writeable)
 {
   struct stat sbuf;
   stat(pty()->ttyName(), &sbuf);
+// TODO
+#ifndef Q_OS_WIN
   if (writeable)
     chmod(pty()->ttyName(), sbuf.st_mode | S_IWGRP);
   else
     chmod(pty()->ttyName(), sbuf.st_mode & ~(S_IWGRP|S_IWOTH));
+#endif
 }
 
 Pty::Pty(int masterFd, QObject* parent)
@@ -307,13 +342,15 @@ void Pty::lockPty(bool lock)
 
 int Pty::foregroundProcessGroup() const
 {
+// TODO
+#ifndef Q_OS_WIN
     int pid = tcgetpgrp(pty()->masterFd());
 
     if ( pid != -1 )
     {
         return pid;
     }
-
+#endif
     return 0;
 }
 
@@ -325,6 +362,8 @@ void Pty::setupChildProcess()
     // this ensures that terminal applications respond to
     // signals generated via key sequences such as Ctrl+C
     // (which sends SIGINT)
+// TODO
+#ifndef Q_OS_WIN
     struct sigaction action;
     sigset_t sigset;
     sigemptyset(&action.sa_mask);
@@ -335,4 +374,5 @@ void Pty::setupChildProcess()
         sigaddset(&sigset, signal);
     }
     sigprocmask(SIG_UNBLOCK, &sigset, NULL);
+#endif
 }

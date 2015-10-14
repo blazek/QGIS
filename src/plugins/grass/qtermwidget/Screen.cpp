@@ -26,7 +26,9 @@
 // Standard
 #include <stdio.h>
 #include <stdlib.h>
+#ifndef Q_OS_WIN
 #include <unistd.h>
+#endif
 #include <assert.h>
 #include <string.h>
 #include <ctype.h>
