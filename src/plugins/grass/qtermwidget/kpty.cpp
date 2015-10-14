@@ -54,11 +54,16 @@
 #endif
 
 #include <sys/types.h>
+#ifndef Q_OS_WIN
 #include <sys/ioctl.h>
 #include <sys/time.h>
 #include <sys/resource.h>
-#include <sys/stat.h>
 #include <sys/param.h>
+#else
+#include <io.h>
+//#include <process.h>
+#endif
+#include <sys/stat.h>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -66,11 +71,17 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#ifndef Q_OS_WIN
 #include <unistd.h>
 #include <grp.h>
+#endif
 
 #if defined(HAVE_PTY_H)
 # include <pty.h>
+#endif
+
+#ifdef HAVE_WINPTY
+#include <winpty.h>
 #endif
 
 #ifdef HAVE_LIBUTIL_H
@@ -84,7 +95,12 @@ extern "C" {
 # include <utempter.h>
 }
 #else
+
+#ifdef Q_OS_WIN
+#else
 # include <utmp.h>
+#endif
+
 # ifdef HAVE_UTMPX
 #  include <utmpx.h>
 # endif
@@ -195,6 +211,7 @@ KPty::~KPty()
 bool KPty::open()
 {
     Q_D(KPty);
+	qDebug() << "KPty::open";
 
     if (d->masterFd >= 0)
         return true;
@@ -209,7 +226,7 @@ bool KPty::open()
     // be opened by several different methods.
 
     // We try, as we know them, one by one.
-
+#ifndef HAVE_WINPTY
 #ifdef HAVE_OPENPTY
 
     char ptsn[PATH_MAX];
@@ -286,6 +303,7 @@ bool KPty::open()
                     continue;
                 }
 #endif /* Q_OS_SOLARIS */
+
                 if (!access(d->ttyName.data(),R_OK|W_OK)) { // checks availability based on permission bits
                     if (!geteuid()) {
                         struct group * p = getgrnam(TTY_GROUP);
@@ -338,7 +356,6 @@ grantedpt:
     int flag = 0;
     ioctl(d->masterFd, TIOCSPTLCK, &flag);
 #endif
-
     d->slaveFd = ::open(d->ttyName.data(), O_RDWR | O_NOCTTY);
     if (d->slaveFd < 0) {
         qWarning() << "Can't open slave pseudo teletype";
@@ -354,11 +371,48 @@ grantedpt:
 #endif
 
 #endif /* HAVE_OPENPTY */
-
     fcntl(d->masterFd, F_SETFD, FD_CLOEXEC);
     fcntl(d->slaveFd, F_SETFD, FD_CLOEXEC);
 
     return true;
+
+#else // #ifndef HAVE_WINPTY
+	qDebug() << "Open winpty";
+	
+	winsize sz; // termios.h
+    //ioctl(STDIN_FILENO, TIOCGWINSZ, &sz);
+    //winpty_t *winpty = winpty_open(sz.ws_col, sz.ws_row);
+	// TODO
+	winpty_t *winpty = winpty_open(80, 24);
+    if (winpty == NULL) {
+        qWarning() << "Cannot open winpty";
+        d->masterFd = -1;
+        d->slaveFd = -1;
+        return false;
+    }
+	qDebug() << "Winpty successfully opened";
+
+	d->masterFd = _open_osfhandle((intptr_t)winpty_get_data_pipe(winpty), 0);
+	if ( d->masterFd == -1 )
+	{
+	  qWarning() << "Cannot get file descriptor";
+	  return false;
+	}
+	d->slaveFd = -1; // ? TODO
+    
+	return true;
+	/*
+    char ptsn[PATH_MAX];
+    if (::openpty( &d->masterFd, &d->slaveFd, ptsn, 0, 0)) {
+        d->masterFd = -1;
+        d->slaveFd = -1;
+        qWarning(175) << "Can't open a pseudo teletype";
+        return false;
+    }
+    d->ttyName = ptsn;
+    */
+
+#endif // #ifndef HAVE_WINPTY
 }
 
 bool KPty::open(int fd)
@@ -425,12 +479,20 @@ bool KPty::openSlave()
 	return false;
     }
     //d->slaveFd = KDE_open(d->ttyName.data(), O_RDWR | O_NOCTTY);
-    d->slaveFd = ::open(d->ttyName.data(), O_RDWR | O_NOCTTY);
+// TODO
+#ifdef Q_OS_WIN
+    d->slaveFd = ::open(d->ttyName.data(), O_RDWR );
+#else
+	d->slaveFd = ::open(d->ttyName.data(), O_RDWR | O_NOCTTY);
+#endif
     if (d->slaveFd < 0) {
 	qDebug() << "Can't open slave pseudo teletype";
 	return false;
     }
+// TODO
+#ifndef Q_OS_WIN
     fcntl(d->slaveFd, F_SETFD, FD_CLOEXEC);
+#endif
     return true;
 }
 
@@ -443,6 +505,8 @@ void KPty::close()
     }
     closeSlave();
     // don't bother resetting unix98 pty, it will go away after closing master anyway.
+// TODO
+#ifndef Q_OS_WIN
     if (memcmp(d->ttyName.data(), "/dev/pts/", 9)) {
         if (!geteuid()) {
             struct stat st;
@@ -457,6 +521,7 @@ void KPty::close()
     }
     ::close(d->masterFd);
     d->masterFd = -1;
+#endif
 }
 
 void KPty::setCTty()
@@ -467,8 +532,10 @@ void KPty::setCTty()
 
     // Become session leader, process group leader,
     // and get rid of the old controlling terminal.
+	// No equivalent on Windows
+// TODO
+#ifndef Q_OS_WIN
     setsid();
-
     // make our slave pty the new controlling terminal.
 #ifdef TIOCSCTTY
     ioctl(d->slaveFd, TIOCSCTTY, 0);
@@ -484,10 +551,14 @@ void KPty::setCTty()
 #elif defined(TIOCSPGRP)
     ioctl(d->slaveFd, TIOCSPGRP, (char *)&pgrp);
 #endif
+#endif // #ifndef Q_OS_WIN
 }
 
 void KPty::login(const char * user, const char * remotehost)
 {
+// TODO
+#ifndef Q_OS_WIN
+
 #ifdef HAVE_UTEMPTER
     Q_D(KPty);
 
@@ -566,10 +637,14 @@ void KPty::login(const char * user, const char * remotehost)
 #  endif
 # endif
 #endif
+#endif // #ifndef Q_OS_WIN
 }
 
 void KPty::logout()
 {
+// TODO
+#ifndef Q_OS_WIN
+
 #ifdef HAVE_UTEMPTER
     Q_D(KPty);
 
@@ -635,6 +710,8 @@ endutent();
 #  endif
 # endif
 #endif
+
+#endif // #ifndef Q_OS_WIN
 }
 
 // XXX Supposedly, tc[gs]etattr do not work with the master on Solaris.
@@ -643,15 +720,25 @@ endutent();
 bool KPty::tcGetAttr(struct ::termios * ttmode) const
 {
     Q_D(const KPty);
-
+// TODO
+#ifdef Q_OS_WIN
+	return false;
+#else
     return _tcgetattr(d->masterFd, ttmode) == 0;
+#endif
+
 }
 
 bool KPty::tcSetAttr(struct ::termios * ttmode)
 {
     Q_D(KPty);
 
+// TODO
+#ifdef Q_OS_WIN
+	return false;
+#else
     return _tcsetattr(d->masterFd, ttmode) == 0;
+#endif
 }
 
 bool KPty::setWinSize(int lines, int columns)
@@ -662,7 +749,12 @@ bool KPty::setWinSize(int lines, int columns)
     memset(&winSize, 0, sizeof(winSize));
     winSize.ws_row = (unsigned short)lines;
     winSize.ws_col = (unsigned short)columns;
+// TODO
+#ifdef Q_OS_WIN
+	return false;
+#else
     return ioctl(d->masterFd, TIOCSWINSZ, (char *)&winSize) == 0;
+#endif
 }
 
 bool KPty::setEcho(bool echo)

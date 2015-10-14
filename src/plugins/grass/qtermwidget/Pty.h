@@ -36,6 +36,7 @@
 #include <QVector>
 #include <QList>
 #include <QSize>
+#include <QWidget>
 
 // KDE
 #include "kptyprocess.h"
@@ -103,7 +104,7 @@ Q_OBJECT
     int start( const QString& program,
                const QStringList& arguments,
                const QStringList& environment,
-               ulong winid,
+               WId winid,
                bool addToUtmp
              );
 

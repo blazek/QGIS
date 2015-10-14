@@ -33,7 +33,11 @@
 #include "kptydevice.h"
 
 #include <stdlib.h>
+#ifdef Q_OS_WIN
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 
 KPtyProcess::KPtyProcess(QObject *parent) :
     KProcess(new KPtyProcessPrivate, parent)

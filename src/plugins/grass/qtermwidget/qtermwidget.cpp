@@ -242,10 +242,12 @@ void QTermWidget::startTerminalTeletype()
 
 void QTermWidget::init(int startnow)
 {
+  	qDebug() << "QTermWidget::init";
     m_layout = new QVBoxLayout();
     m_layout->setMargin(0);
     setLayout(m_layout);
 
+	qDebug() << "create TermWidgetImpl";
     m_impl = new TermWidgetImpl(this);
     m_impl->m_terminalDisplay->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
     m_layout->addWidget(m_impl->m_terminalDisplay);
@@ -297,6 +299,7 @@ void QTermWidget::init(int startnow)
 
     setScrollBarPosition(NoScrollBar);
 
+	qDebug() << "add view to session";
     m_impl->m_session->addView(m_impl->m_terminalDisplay);
 
     connect(m_impl->m_session, SIGNAL(finished()), this, SLOT(sessionFinished()));

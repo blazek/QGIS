@@ -26,9 +26,13 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <stdio.h>
+#ifdef Q_OS_WIN
+#include <io.h>
+#else
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#endif
 #include <errno.h>
 
 #include <QtDebug>
@@ -110,6 +114,9 @@ HistoryFile::~HistoryFile()
 //to avoid this.
 void HistoryFile::map()
 {
+#ifdef Q_OS_WIN
+    // TODO?
+#else
     assert( fileMap == 0 );
 
     fileMap = (char*)mmap( 0 , length , PROT_READ , MAP_PRIVATE , ion , 0 );
@@ -121,13 +128,16 @@ void HistoryFile::map()
             fileMap = 0;
             qDebug() << __FILE__ << __LINE__ << ": mmap'ing history failed.  errno = " << errno;
     }
+#endif
 }
 
 void HistoryFile::unmap()
 {
+// TODO Q_OS_WIN
+#ifndef Q_OS_WIN
     int result = munmap( fileMap , length );
     assert( result == 0 ); Q_UNUSED( result );
-
+#endif
     fileMap = 0;
 }
 

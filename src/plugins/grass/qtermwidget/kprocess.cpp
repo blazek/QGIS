@@ -345,6 +345,7 @@ void KProcess::start()
     Q_D(KProcess);
 
     QProcess::start(d->prog, d->args, d->openMode);
+	//QProcess::start("c:/OSGeo4W/apps/msys/bin/ls.exe", d->args, d->openMode);
 }
 
 int KProcess::execute(int msecs)

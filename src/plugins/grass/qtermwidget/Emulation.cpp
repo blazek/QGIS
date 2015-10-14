@@ -26,7 +26,10 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef Q_OS_WIN
+#else
 #include <unistd.h>
+#endif
 
 // Qt
 #include <QApplication>
@@ -38,6 +41,8 @@
 #include <QThread>
 
 #include <QTime>
+
+#include <QDebug>
 
 // KDE
 //#include <kdebug.h>
@@ -217,6 +222,7 @@ TODO: Character composition from the old code.  See #96536
 
 void Emulation::receiveData(const char* text, int length)
 {
+    qDebug() << "Emulation::receiveData : " << text;
     emit stateSet(NOTIFYACTIVITY);
 
     bufferedUpdate();

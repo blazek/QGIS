@@ -258,14 +258,15 @@ void QgsGrassTools::runModule( QString name, bool direct )
     return;  // Section
   }
 
-#ifdef HAVE_POSIX_OPENPT
+//#ifdef HAVE_POSIX_OPENPT
   QgsGrassShell* sh = 0;
-#endif
+//#endif
 
   QWidget *m;
   if ( name == "shell" )
   {
-#ifdef Q_OS_WIN
+//#ifdef Q_OS_WIN
+#if 0
     QgsGrass::putEnv( "GRASS_HTML_BROWSER", QgsGrassUtils::htmlBrowserPath() );
     if ( !QProcess::startDetached( getenv( "COMSPEC" ) ) )
     {
@@ -274,12 +275,13 @@ void QgsGrassTools::runModule( QString name, bool direct )
     return;
 #else
 
-#ifdef HAVE_POSIX_OPENPT
+//#ifdef HAVE_POSIX_OPENPT
+	QgsDebugMsg( "Create QgsGrassShell" );
     sh = new QgsGrassShell( this, mTabWidget );
     m = qobject_cast<QWidget *>( sh );
-#else
-    QMessageBox::warning( 0, tr( "Warning" ), tr( "GRASS Shell is not compiled." ) );
-#endif
+//#else
+//    QMessageBox::warning( 0, tr( "Warning" ), tr( "GRASS Shell is not compiled." ) );
+//#endif
 
 #endif // Q_OS_WIN
   }
